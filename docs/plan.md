@@ -184,10 +184,11 @@ the phone.
 - Privacy manifest, automatic signing with the team; no entitlements
   needed — no iCloud, no push, no app groups. `xcodebuild archive` with
   automatic provisioning succeeds for the app and the widget.
-- The record button is a full-width red capsule in a bottom safe-area bar
-  and says "Record". It is not a toolbar item: iOS 26 restyles those and
-  collapses a labelled one to its glyph, and a lone microphone is a guess.
-  Search is pinned under the title so the bottom belongs to the button.
+- The record button is the whole strip under the list: solid red from
+  edge to edge and down through the home indicator, "Record" in white on
+  it, split-view style — the list ends where the red begins rather than
+  scrolling under a button. Not a toolbar item: iOS 26 restyles those and
+  collapses a labelled one to its glyph. Search is pinned under the title.
 - Decision on the shared core: still copied, see "Decisions"
 
 Ships: a TestFlight build, once it has been run on a phone.
@@ -245,6 +246,12 @@ the detail view appears. Debug builds only.
 ## What is proven, and what is not
 
 Verified by something repeatable, as of milestone 5:
+
+- **the real microphone, on a simulator.** `UITests/RecordFlowUITests`
+  drives the real app: tap Record, the Mac's microphone runs through
+  `AudioRecorder`, tap Stop, the recording opens with its player loaded
+  and is in the list. Run with `xcodebuild test -only-testing:ClioUITests`
+  after granting the microphone with `simctl privacy`.
 
 - segments come through the loop shifted by the trimmed lead, the
   transcript equals their join, and they survive the index; the
@@ -313,10 +320,9 @@ Not verified, and worth knowing:
   and transcribed on an iPhone or a simulator yet. The simulator has no
   Neural Engine, so WhisperKit falls back to CPU there — slow, but it
   should work; the device is where the timing is measured.
-- **the real microphone.** `AudioRecorder` builds and mirrors the Mac
-  recorder, but no one has recorded through it on a phone or a simulator.
-  The permission prompt cannot be answered from `simctl`; the first run on a
-  device is the test.
+- **the real microphone on a phone.** It records on the simulator through
+  the Mac's microphone; the phone's own microphone, Bluetooth headsets and
+  the permission prompt on a device are still a first-run test.
 - **background downloads across a relaunch.** Downloads go through a
   background `URLSession` (`BackgroundDownloader`), so a locked screen
   does not end them; each task carries its destination and checksum so

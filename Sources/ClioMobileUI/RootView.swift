@@ -30,6 +30,12 @@ public struct RootView: View {
     }
 
     public var body: some View {
+        GeometryReader { proxy in
+            stack.environment(\.safeAreaInsets, proxy.safeAreaInsets)
+        }
+    }
+
+    private var stack: some View {
         NavigationStack(path: $path) {
             RecordingsListView(onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })

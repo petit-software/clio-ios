@@ -99,6 +99,23 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: TJ3ALYQV5G
 
+  # Drives the real app on a simulator through the real microphone. See
+  # UITests/RecordFlowUITests.swift for how to run it.
+  ClioUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Clio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Clio
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: TJ3ALYQV5G
+
 schemes:
   Clio:
     build:
@@ -111,6 +128,7 @@ schemes:
       config: Debug
       targets:
         - package: ClioMobile/ClioMobileCoreTests
+        - ClioUITests
     profile:
       config: Release
     archive:

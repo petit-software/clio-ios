@@ -23,6 +23,9 @@ xcodebuild -project Clio.xcodeproj -scheme Clio \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 xcodebuild -project Clio.xcodeproj -scheme Clio \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
+xcrun simctl privacy booted grant microphone com.bartbak.clio.ios   # then the UI test:
+xcodebuild -project Clio.xcodeproj -scheme Clio -only-testing:ClioUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 17' test
 ```
 
 The Xcode project is generated from `project.yml` and not tracked. To put a
