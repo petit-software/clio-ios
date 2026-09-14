@@ -1,0 +1,279 @@
+import Foundation
+import Testing
+@testable import ClioMobileCore
+
+/// The whole loop on a simulated microphone and the stub engine: this is
+/// what proves the state machine, not the views.
+@Suite("Capture controller")
+struct CaptureTests {
+
+    /// The stub engine on a simulated install of the default model, so the
+    /// loop has a model to "load" without anything on disk.
+    @MainActor
+    private func makeController(recorder: SimulatedRecorder = SimulatedRecorder(),
+                                settings: Settings = Settings(),
+                                installed: [InstalledModel] = [ModelManager.simulatedInstalled()],
+                                engine: StubTranscriptionEngine = StubTranscriptionEngine(latency: .milliseconds(10)))
+        throws -> (CaptureController, RecordingStore, URL) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clio-ios-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let library = RecordingStore(indexURL: directory.appendingPathComponent("r.json"),
+                                     audioDirectory: directory)
+        let controller = CaptureController(recorder: recorder,
+                                           engine: engine,
+                                           models: .simulating(installed: installed),
+                                           settings: .simulating(settings),
+                                           library: library)
+        return (controller, library, directory)
+    }
+
+    @Test("Record, stop, transcribe: a recording lands in the library with its audio")
+    @MainActor
+    func happyPath() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        #expect(controller.state == .recording)
+
+        await controller.stop()
+        #expect(controller.state == .idle)
+        #expect(recorder.stopCount == 1)
+
+        let recording = try #require(library.recordings.first)
+        #expect(controller.lastRecordingID == recording.id)
+        #expect(recording.status == .transcribed)
+        #expect(recording.transcript.contains("[Clio stub]"))
+        #expect(recording.modelID == "stub", "what the engine says it ran")
+        #expect(await controller.engine.isLoaded, "loaded on the way, and kept by default")
+        #expect(abs(recording.duration - 2) < 0.01)
+
+        let audio = library.audioURL(for: recording)
+        #expect(FileManager.default.fileExists(atPath: audio.path))
+        let samples = try AudioFiles.read(audio)
+        #expect(samples.count == Int(2 * AudioRecorder.sampleRate))
+    }
+
+    @Test("Cancel while recording throws it away")
+    @MainActor
+    func cancelWhileRecording() async throws {
+        let recorder = SimulatedRecorder()
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.cancel()
+        #expect(controller.state == .idle)
+        #expect(recorder.cancelCount == 1)
+        #expect(library.recordings.isEmpty)
+    }
+
+    @Test("A microphone that will not start is a failure the user can see")
+    @MainActor
+    func startFailure() async throws {
+        let recorder = SimulatedRecorder(startError: AudioRecorder.RecorderError.permissionDenied)
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        guard case .failed(let message) = controller.state else {
+            Issue.record("expected .failed, got \(controller.state)")
+            return
+        }
+        #expect(message.contains("microphone"))
+        #expect(library.recordings.isEmpty)
+
+        controller.dismissFailure()
+        #expect(controller.state == .idle)
+    }
+
+    @Test("Nothing captured is saved as nothing heard, not transcribed")
+    @MainActor
+    func nothingHeard() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 0
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .nothingHeard)
+    }
+
+    @Test("Formatting settings apply to what the engine returns")
+    @MainActor
+    func formatting() async throws {
+        var settings = Settings()
+        settings.wordReplacements = [WordReplacement(find: "stub", replace: "STUB")]
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 1
+        let (controller, library, directory) = try makeController(recorder: recorder, settings: settings)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.transcript.hasPrefix("[Clio STUB]"))
+    }
+
+    @Test("Hitting the cap stops the recording on its own")
+    @MainActor
+    func reachesLimit() async throws {
+        var settings = Settings()
+        settings.maxRecordingSeconds = 60
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 61
+        let (controller, library, directory) = try makeController(recorder: recorder, settings: settings)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        // The poller notices on its first pass.
+        for _ in 0..<50 where controller.state != .idle {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(controller.state == .idle)
+        let recording = try #require(library.recordings.first)
+        #expect(abs(recording.duration - 60) < 0.01, "capped, not 61")
+    }
+
+    @Test("Re-transcribing a failed recording reads the audio back from disk")
+    @MainActor
+    func retranscribe() async throws {
+        let (controller, library, directory) = try makeController()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let recording = Recording(duration: 1, status: .failed("no model"))
+        let samples = [Float](repeating: 0.1, count: Int(AudioRecorder.sampleRate))
+        try AudioFiles.write(samples, to: library.audioURL(for: recording))
+        library.add(recording)
+
+        await controller.retranscribe(recording.id)
+        let updated = try #require(library[recording.id])
+        #expect(updated.status == .transcribed)
+        #expect(updated.transcript.contains("16000 samples"))
+    }
+    @Test("No model installed: the audio is kept and the recording says why")
+    @MainActor
+    func noModel() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 1
+        let (controller, library, directory) = try makeController(recorder: recorder, installed: [])
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(controller.activeModel == nil)
+        await controller.start()
+        await controller.stop()
+
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .failed(CaptureController.noModelMessage))
+        #expect(FileManager.default.fileExists(atPath: library.audioURL(for: recording).path))
+        #expect(controller.state == .idle, "not a failure of the controller; the recording exists")
+    }
+
+    @Test("Silence with trimming on is nothing heard, and the engine is not asked")
+    @MainActor
+    func silenceIsTrimmedToNothing() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .nothingHeard)
+        #expect(abs(recording.duration - 3) < 0.01, "the recording keeps its real length")
+    }
+
+    @Test("Trimming off hands the whole clip to the engine")
+    @MainActor
+    func trimmingOff() async throws {
+        var settings = Settings()
+        settings.voiceActivityDetection = false
+        let recorder = SimulatedRecorder()
+        recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+        let (controller, library, directory) = try makeController(recorder: recorder, settings: settings)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .transcribed)
+        #expect(recording.transcript.contains("48000 samples"))
+    }
+
+    @Test("Keep in memory off unloads the model after each transcription")
+    @MainActor
+    func unloadsWhenNotKept() async throws {
+        var settings = Settings()
+        settings.keepModelInMemory = false
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 1
+        let (controller, _, directory) = try makeController(recorder: recorder, settings: settings)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        #expect(await controller.engine.isLoaded == false)
+
+        controller.warmUp()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await controller.engine.isLoaded == false, "warm-up respects the setting too")
+    }
+
+    @Test("The stored selection follows what is installed")
+    @MainActor
+    func reconcilesActiveModel() async throws {
+        var settings = Settings()
+        settings.activeModelID = "gone"
+        let tiny = ModelManager.simulatedInstalled("openai_whisper-tiny")
+        let (controller, _, directory) = try makeController(settings: settings, installed: [tiny])
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // A selection that is not installed is replaced on construction.
+        #expect(controller.settings.settings.activeModelID == "openai_whisper-tiny")
+        #expect(controller.activeModel == tiny)
+
+        // Nothing installed at all clears it.
+        let (empty, _, directory2) = try makeController(settings: settings, installed: [])
+        defer { try? FileManager.default.removeItem(at: directory2) }
+        #expect(empty.settings.settings.activeModelID == nil)
+    }
+}
+
+@Suite("Audio files")
+struct AudioFileTests {
+
+    @Test("A WAV round-trips its samples at 16 kHz mono")
+    func roundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clio-ios-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tone.wav")
+
+        let samples = (0..<16_000).map { i in
+            0.5 * sin(2 * .pi * 440 * Float(i) / 16_000)
+        }
+        try AudioFiles.write(samples, to: url)
+        let back = try AudioFiles.read(url)
+
+        #expect(back.count == samples.count)
+        // 16-bit quantisation: within one step.
+        let worst = zip(samples, back).map { abs($0 - $1) }.max() ?? 1
+        #expect(worst < 1.0 / 32_000)
+    }
+
+    @Test("The level scaler maps silence to the floor and speech into the window")
+    func levelScaler() {
+        var scaler = LevelScaler()
+        #expect(scaler.level(rms: 0, dt: 0.1) == 0)
+        let speech = scaler.level(rms: 0.1, dt: 0.1)    // -20 dBFS
+        #expect(speech > 0.7 && speech <= 1)
+        let quiet = scaler.level(rms: 0.003, dt: 0.1)   // -50 dBFS
+        #expect(quiet < 0.05)
+    }
+}

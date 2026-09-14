@@ -1,0 +1,293 @@
+# Clio for iOS — plan
+
+Clio on the Mac is dictation: hold a key, speak, and the text is pasted into
+the frontmost app. That loop does not exist on iOS — there is no global
+hotkey, no frontmost app to paste into, and no way to inject text. What
+survives the move is the promise: **speech becomes text on this device, and
+nothing leaves it.**
+
+So the iOS app is a recorder with a local transcriber. Tap record, speak,
+stop; the audio is kept, Whisper runs on the Neural Engine, and the transcript
+sits beside the recording. Everything offline after the model download.
+
+This document is the plan: what is being built, in what order, and what each
+milestone has to prove before the next one starts. It is written the way the
+Mac app's `AGENTS.md` is — for whoever picks it up cold.
+
+## Product
+
+Four screens, all native SwiftUI, no third-party UI:
+
+| Screen | What it does |
+|---|---|
+| **Recordings** | The list. Newest first, title, date, duration, first line of the transcript. Search. Swipe to delete. A record button that is never more than one tap away. |
+| **Record** | Elapsed time, live level meter, the cap. Stop or cancel. Transcribes on stop and returns to the list with the new recording at the top. |
+| **Recording** | Playback with a scrubber, the transcript (selectable), an editable title, share, copy, delete. Later: an on-device summary. |
+| **Settings** | Model (download, select, delete), transcription (language, translate, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD), intelligence, about. |
+
+"Local LLM" means two on-device models, both native:
+
+1. **Whisper via WhisperKit** — the transcriber. Same engine, same catalog,
+   same Hugging Face layout as the Mac app, run on the Apple Neural Engine.
+2. **Apple Foundation Models** — the on-device language model that ships
+   with iOS 26 and Apple Intelligence. Used for titles and summaries of a
+   transcript. Gated behind availability; the app is complete without it.
+
+Non-goals: cloud anything, streaming transcription, iCloud sync, sharing
+between the Mac app and this one, an iPad layout beyond what SwiftUI gives
+for free.
+
+## Shape
+
+```
+clio-ios/
+  Package.swift               ClioMobileCore, ClioMobileUI, tests
+  project.yml                 xcodegen → Clio.xcodeproj (not tracked)
+  Resources/Info.plist        usage descriptions, background audio
+  Sources/
+    ClioMobileCore/           no SwiftUI; everything with logic
+    ClioMobileObjC/           one function: catch an NSException
+    ClioMobileUI/             every view, AppModel wiring
+    ClioMobileApp/            @main and nothing else
+  Tests/ClioMobileCoreTests/
+  docs/plan.md                this file
+```
+
+The same three-target split as the Mac app, for the same reasons: logic in a
+library with no SwiftUI so it is testable without a device, views in a
+library so `#Preview` renders dependably, and an executable that owns
+`@main` and nothing else.
+
+The core is **copied and adapted** from `../clio/Sources/ClioCore` (the Mac
+app, a sibling repository), not imported.
+`ClioCore` builds for macOS only — it owns the event tap, CoreAudio device
+enumeration and the pasteboard — and making it cross-platform means
+`#if os(macOS)` through a shipping app to serve one that does not exist yet.
+The platform-neutral pieces (settings, formatter, model catalog, transport,
+manager, the engine seam, WhisperKit engine) are ~1,200 lines and change
+rarely. If they drift, milestone 4 is where they become a shared package
+both repositories depend on.
+
+Persistence is JSON, as on the Mac: one `settings.json`, one
+`recordings.json`, and a WAV per recording. SwiftData would be the more
+"iOS" choice, but a Codable struct decoded field by field is what has kept
+the Mac app's settings surviving every schema change, and the store stays
+testable without a model container.
+
+## Milestones
+
+Each milestone ends with something that runs. "Done" means it builds for the
+simulator, its tests pass, and it has been looked at on a screen.
+
+### M1 — the loop, on a stub  ✓
+
+The whole app, with the transcriber faked. Every screen, every store, the
+recorder, the state machine, and a stub engine that returns an obviously fake
+transcript — so a broken ASR path can never look like a working one.
+
+- `Settings`, `SettingsStore` — field-by-field decode, debounced save
+- `Recording`, `RecordingStore` — the library: index + audio files
+- `AudioRecorder` — AVAudioEngine tap at `format: nil`, converter built from
+  the buffers, 16 kHz mono Float32, WAV written at stop, the cap
+- `CaptureController` — idle → recording → transcribing → done, cancellable
+- `TranscriptionEngine` protocol + `StubTranscriptionEngine`
+- `TranscriptFormatter` — replacements, capitalisation, trailing punctuation
+- Recordings list, Record sheet, Recording detail with playback, Settings
+- Previews on simulated dependencies; no preview touches the microphone
+- Tests: settings round-trip and tolerance, store add/delete/rename,
+  formatter, capture state machine on a simulated recorder
+
+Proves: the app is usable end to end and nothing about the UI depends on
+which engine is behind the seam.
+
+### M2 — Whisper  ✓
+
+Swap the stub for the real thing.
+
+- `ModelCatalog`, `ModelTransport`, `ModelManager` from the Mac app —
+  Hugging Face listing, SHA-256 verified download, tokenizer beside the
+  model, resumable at file granularity. Downloads stage in `<id>.partial`
+  and are renamed into place when complete, so a half-download never reads
+  as installed and a failed one resumes on retry. No shared Hugging Face
+  cache: there is no `~/.cache` on a phone.
+- `WhisperKitEngine`, `withoutTimestamps` false, tokenizer folder set
+- `VoiceActivityTrimmer` on WhisperKit's energy VAD; silence at both ends
+  is cut before transcription, a clip with no speech is "nothing heard"
+  without the engine being asked
+- `CaptureController` loads the active model on record start (overlapping
+  the load with the talking), transcribes on stop, and unloads afterwards
+  when "keep in memory" is off. Nothing installed marks the recording
+  failed with a message and keeps the audio; "Transcribe Again" picks it
+  up once a model is there.
+- Settings ▸ Model: one row per catalog model with download, progress,
+  cancel, select, delete; models directory excluded from backup. About
+  shows models on disk. The list shows a banner while nothing is installed.
+- The active model is warmed when the app becomes active if "keep in
+  memory" is on; selecting a different model drops the resident one
+- Integration test, gated on `CLIO_INTEGRATION=1`, host only: install
+  Tiny, transcribe a phrase from `say`, assert the words — once through
+  the engine alone, once through the capture controller
+
+Proves: transcription works on a Neural Engine path, offline, through the
+same loop the app runs. **Not yet proven on a phone** — see below.
+
+### M3 — on-device intelligence  ← this milestone
+
+Apple Foundation Models, iOS 26+, Apple Intelligence on.
+
+- `SummaryEngine` protocol with a stub and an "unavailable" engine;
+  `FoundationModelsSummarizer` behind `#if canImport` + `#available`, asks
+  `SystemLanguageModel.default.availability` and `supportsLocale` before
+  every call, and turns the framework's errors into sentences
+- Guided generation: one `@Generable` draft with a title and a summary,
+  one fresh session per recording, temperature 0.3
+- `IntelligenceController` runs beside the capture loop: the recording is
+  in the library the moment the transcript is, the title and summary land
+  on it a few seconds later. Skipped under twelve words; off in Settings
+  or unavailable on the phone does nothing.
+- `Recording.generatedTitle`: shown when the user has not typed a name,
+  never overwrites one they did
+- Settings ▸ Intelligence: the toggle, and the reason when unavailable
+- Detail view: summary section with "Summarizing…", the failure and a
+  retry, or a Summarize button; "Summarize Again" in the menu
+- Integration test, gated on `CLIO_INTEGRATION=1`, host only: the real
+  model writes a title and summary for a fixed transcript, or prints why
+  it cannot
+
+Proves: an LLM can run over a transcript without the transcript leaving
+the phone.
+
+### M4 — polish and ship
+
+- Background recording (audio session interruption + route change handling
+  proven, not just written)
+- Haptics on start/stop, a Live Activity while recording
+- App icon (re-fitted from the Mac artwork), launch screen
+- Storage management: total size in About, delete-all with confirmation
+- TestFlight: signing, entitlements, privacy manifest
+- Decide whether the shared core becomes a package both apps import
+
+## Looking at it
+
+Any screen can be put on a simulator without tapping through to it, on
+simulated data — the same idea as the Mac app's `CLIO_*_SHOW` switches:
+
+```sh
+xcodegen generate
+xcodebuild -project Clio.xcodeproj -scheme Clio \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath .build/DerivedData build
+xcrun simctl boot "iPhone 17 Pro"
+xcrun simctl install booted .build/DerivedData/Build/Products/Debug-iphonesimulator/Clio.app
+SIMCTL_CHILD_CLIO_SIMULATE=1 SIMCTL_CHILD_CLIO_SHOW=record \
+  xcrun simctl launch --terminate-running-process booted com.bartbak.clio.ios
+xcrun simctl io booted screenshot record.png
+```
+
+`CLIO_SIMULATE=1` runs on fixed recordings, a fake microphone and the stub
+engine, touching nothing on disk. `CLIO_SHOW` is `record`, `settings` or
+`detail`. Debug builds only.
+
+## What is proven, and what is not
+
+Verified by something repeatable, as of milestone 3:
+
+- the intelligence controller on a stub engine: summarizes after a long
+  transcript, skips short ones, respects the toggle and availability,
+  reports a failure, regenerates without touching the user's title, and
+  is handed every transcript the capture loop finishes
+  (`IntelligenceTests`)
+- the prompt's limits and the title clean-up; the generated title's place
+  in the display order and its round trip through the index
+
+- the state machine, end to end, on a simulated microphone (`CaptureTests`),
+  including no model installed, silence trimmed to nothing, trimming off,
+  unload after transcription, and the stored selection following what is
+  installed
+- the model manager on a stub transport: discovery ignores staging folders,
+  the tokenizer lands in its own folder without the weights, a failed
+  download resumes at file granularity, cancel clears the staging folder,
+  delete only touches our own directory (`ModelTests`)
+- the trimmer cuts silence at both ends and returns nil for none
+  (`TrimmerTests`)
+- a WAV round-trips its samples; the level scaler's window
+- settings and the recording index survive missing and malformed fields
+- every screen renders on an iPhone 17 Pro simulator, on simulated data
+- with `CLIO_INTEGRATION=1`, on the host: Tiny downloads from Hugging Face
+  with its tokenizer and transcribes synthesized speech correctly, through
+  the engine and through the controller
+
+Not verified, and worth knowing:
+
+- **Foundation Models on a phone.** The engine is exercised on the host
+  when this Mac has Apple Intelligence on, and in the app only through the
+  stub. The simulator runs the real model only if the host Mac has Apple
+  Intelligence; a phone needs iOS 26 and an A17 Pro or later.
+- **Languages.** The model supports a fixed set of locales. Whisper's
+  language is checked against `supportsLocale` first and the failure says
+  which language, but Dutch has not been tried.
+- **WhisperKit on a phone.** The engine is the Mac app's and the integration
+  test runs it on the host's Neural Engine. Nobody has downloaded a model
+  and transcribed on an iPhone or a simulator yet. The simulator has no
+  Neural Engine, so WhisperKit falls back to CPU there — slow, but it
+  should work; the device is where the timing is measured.
+- **the real microphone.** `AudioRecorder` builds and mirrors the Mac
+  recorder, but no one has recorded through it on a phone or a simulator.
+  The permission prompt cannot be answered from `simctl`; the first run on a
+  device is the test.
+- **playback of a real file.** The player has only been drawn against a
+  missing file.
+- **background downloads.** A download runs in a `Task` on `URLSession.shared`
+  and dies with the app if iOS suspends it. Whisper Small is 217 MB and
+  arrives in a minute on Wi-Fi; the two large models may need a background
+  `URLSession` (M4) if suspension turns out to bite.
+- **background recording** with the screen locked.
+
+## Decisions already made
+
+- **iOS 18 minimum.** `@Observable`, `ContentUnavailableView`, editable
+  `navigationTitle`, `AVAudioApplication` for the permission. iOS 26 only
+  for Foundation Models, gated.
+- **Package platforms include macOS 15** so `swift test` runs on the host
+  without a simulator. Anything iOS-only sits behind `#if os(iOS)`. The
+  simulator run is the one that counts; the host run is the fast one.
+- **The tap takes `format: nil`.** The Mac app's every crash was the tap
+  install raising on a Bluetooth headset changing format. The converter is
+  built from the buffers that arrive, and install runs through the ObjC
+  exception shim.
+- **Samples are kept in memory, the WAV is written at stop.** 10 minutes of
+  Float32 at 16 kHz is 38 MB — the Mac app holds the same. It keeps disk I/O
+  off the audio thread and the file is only ever complete or absent.
+- **Levels are polled, not pushed.** The tap thread writes one float under a
+  lock; the controller reads it 30× a second on the main actor. Nothing on
+  the audio thread ever touches an actor.
+- **`Settings` and `Recording` decode field by field.** A missing key costs
+  that one field, never the file. Add new fields to `init(from:)`.
+- **Recordings live in Application Support, not Documents.** They do not
+  belong in the Files app unless the user shares them. Models are excluded
+  from backup; recordings are not.
+- **Whisper Small is the default, not Distil Large as on the Mac.** A phone
+  has less memory, and the recordings are as likely to be Dutch as English;
+  Small is multilingual and 217 MB. Distil Large and Turbo are in the same
+  list, one tap away.
+- **The model is loaded on record start, not on stop.** A cold load takes
+  seconds; started when the user begins talking, it is done by the time
+  they stop. "Keep model in memory" decides whether it is released after.
+- **Summaries do not block the transcript.** The row appears when the
+  transcript is in and the title and summary update it a moment later,
+  because a summary that takes ten seconds should not hold the recording
+  hostage, and one that fails should not mark the recording as failed.
+- **Integration tests are host-only.** They need `say` for speech and the
+  package builds for macOS so `swift test` runs without a simulator. A
+  device run is a manual step until there is a fixture clip.
+
+## Open
+
+- Whether the level meter should share the Mac app's five-band analyser
+  (`MeterAnalyzer`, Accelerate) or stay a single RMS bar. Single bar for M1.
+- Locked-phone recording needs `UIBackgroundModes: audio` — set in M1 — but
+  interruption handling (a phone call mid-recording) is M4 and untested
+  until then.
+- Foundation Models in the simulator needs Apple Intelligence enabled on the
+  host Mac. If it is not, the live app on the simulator shows the reason
+  in Settings ▸ Intelligence and M3 is proven on a device.

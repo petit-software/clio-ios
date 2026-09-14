@@ -1,0 +1,87 @@
+# XcodeGen spec for Clio.xcodeproj (iOS). Generated, not tracked:
+#
+#     xcodegen generate
+#
+# SwiftPM is the source of truth for the code; this project exists for what
+# SwiftPM cannot do — an app bundle with an Info.plist, signing, and a
+# simulator/device run. It mirrors project.yml in the sibling clio repository.
+name: Clio
+options:
+  bundleIdPrefix: com.bartbak
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  xcodeVersion: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  ClioMobile:
+    path: .
+
+targets:
+  Clio:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/ClioMobileApp
+      - path: Resources/Info.plist
+        buildPhase: none
+      # Visible in the navigator, built through the package.
+      - path: Sources/ClioMobileCore
+        buildPhase: none
+      - path: Sources/ClioMobileUI
+        buildPhase: none
+      - path: Tests
+        buildPhase: none
+      - path: docs
+        buildPhase: none
+      - path: Package.swift
+        buildPhase: none
+      - path: project.yml
+        buildPhase: none
+      - path: README.md
+        buildPhase: none
+    dependencies:
+      - package: ClioMobile
+        product: ClioMobileUI
+    settings:
+      base:
+        PRODUCT_NAME: Clio
+        PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: TJ3ALYQV5G
+        SWIFT_EMIT_LOC_STRINGS: YES
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: -Onone
+          DEBUG_INFORMATION_FORMAT: dwarf
+          ENABLE_TESTABILITY: YES
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+
+schemes:
+  Clio:
+    build:
+      targets:
+        Clio: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: ClioMobile/ClioMobileCoreTests
+    profile:
+      config: Release
+    archive:
+      config: Release
