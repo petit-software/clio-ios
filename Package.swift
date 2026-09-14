@@ -12,6 +12,9 @@ let package = Package(
     products: [
         .library(name: "ClioMobileCore", targets: ["ClioMobileCore"]),
         .library(name: "ClioMobileUI", targets: ["ClioMobileUI"]),
+        // The Live Activity's attributes, shared by the app and the widget
+        // extension. Nothing else, so the extension stays small.
+        .library(name: "ClioMobileActivity", targets: ["ClioMobileActivity"]),
     ],
     dependencies: [
         // CoreML Whisper with an Apple Neural Engine path. The same version
@@ -30,9 +33,10 @@ let package = Package(
         // One Objective-C function: run a block and catch the NSException
         // it may raise. AVAudioEngine throws them; Swift cannot catch them.
         .target(name: "ClioMobileObjC"),
+        .target(name: "ClioMobileActivity"),
         // Every view, plus AppModel. A library so #Preview renders
         // dependably.
-        .target(name: "ClioMobileUI", dependencies: ["ClioMobileCore"]),
+        .target(name: "ClioMobileUI", dependencies: ["ClioMobileCore", "ClioMobileActivity"]),
         .testTarget(name: "ClioMobileCoreTests", dependencies: ["ClioMobileCore"]),
     ]
 )

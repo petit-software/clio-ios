@@ -141,6 +141,8 @@ struct SettingsView: View {
                            value: "\(model.library.recordings.count) · \(Format.bytes(model.library.audioBytes))")
             LabeledContent("Models",
                            value: "\(model.models.installed.count) · \(Format.bytes(model.models.installedBytes))")
+            LabeledContent("On this phone",
+                           value: Format.bytes(model.library.audioBytes + model.models.installedBytes))
             if let error = model.settings.lastSaveError ?? model.library.lastSaveError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)

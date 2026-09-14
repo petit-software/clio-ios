@@ -131,7 +131,7 @@ Swap the stub for the real thing.
 Proves: transcription works on a Neural Engine path, offline, through the
 same loop the app runs. **Not yet proven on a phone** — see below.
 
-### M3 — on-device intelligence  ← this milestone
+### M3 — on-device intelligence  ✓
 
 Apple Foundation Models, iOS 26+, Apple Intelligence on.
 
@@ -157,15 +157,35 @@ Apple Foundation Models, iOS 26+, Apple Intelligence on.
 Proves: an LLM can run over a transcript without the transcript leaving
 the phone.
 
-### M4 — polish and ship
+### M4 — polish and ship  ← this milestone
 
-- Background recording (audio session interruption + route change handling
-  proven, not just written)
-- Haptics on start/stop, a Live Activity while recording
-- App icon (re-fitted from the Mac artwork), launch screen
-- Storage management: total size in About, delete-all with confirmation
-- TestFlight: signing, entitlements, privacy manifest
-- Decide whether the shared core becomes a package both apps import
+- Interruptions and route changes: the recorder observes the audio
+  session and the engine. A call or Siri pauses capture into an
+  `interrupted` state — the buffer and the tap survive, the engine is
+  started again when the interruption ends, and if it cannot be, the
+  recording stops with what it has. A route change restarts the engine on
+  the new hardware; the tap has no format of its own, so it follows.
+  Proven on the state machine through simulated events; on a phone with a
+  real call, not yet.
+- Haptics on start, stop and failure, behind the Settings toggle
+- A Live Activity while recording: `ClioMobileActivity` (attributes only,
+  shared), `ClioWidget` extension (Lock Screen banner and Dynamic Island,
+  a system-counted clock, paused state), `RecordingActivityController`
+  in the app following the capture state
+- App icon re-fitted from the Mac artwork: the export has transparent
+  corners and iOS wants an opaque square, so it is drawn over a gradient
+  sampled from its own background column. Light and dark variants.
+- Storage: recordings, models and the total in About; delete-all with
+  confirmation
+- Privacy manifest, automatic signing with the team; no entitlements
+  needed — no iCloud, no push, no app groups
+- The record button is a full-width red capsule in a bottom safe-area bar
+  and says "Record". It is not a toolbar item: iOS 26 restyles those and
+  collapses a labelled one to its glyph, and a lone microphone is a guess.
+  Search is pinned under the title so the bottom belongs to the button.
+- Decision on the shared core: still copied, see "Decisions"
+
+Ships: a TestFlight build, once it has been run on a phone.
 
 ## Looking at it
 
@@ -190,7 +210,11 @@ engine, touching nothing on disk. `CLIO_SHOW` is `record`, `settings` or
 
 ## What is proven, and what is not
 
-Verified by something repeatable, as of milestone 3:
+Verified by something repeatable, as of milestone 4:
+
+- the capture state machine through an interruption: paused, resumed,
+  ended when the recorder cannot resume, stop and cancel while paused,
+  the microphone lost mid-recording (`CaptureTests`)
 
 - the intelligence controller on a stub engine: summarizes after a long
   transcript, skips short ones, respects the toggle and availability,
@@ -219,6 +243,15 @@ Verified by something repeatable, as of milestone 3:
 
 Not verified, and worth knowing:
 
+- **A real phone call.** The interruption path is proven on simulated
+  events; whether `AVAudioEngine` restarts cleanly after a call on a
+  device, and whether the gap in the buffer is where the call was, is a
+  device test. Same for unplugging headphones mid-recording.
+- **The Live Activity on a Lock Screen.** Seen in the simulator's Dynamic
+  Island — red dot, running clock — with another app in front. The Lock
+  Screen banner and the paused state have not been looked at. If the app
+  is killed mid-recording the activity outlives it until its stale date,
+  the cap plus a minute; a phone shows the same.
 - **Foundation Models on a phone.** The engine is exercised on the host
   when this Mac has Apple Intelligence on, and in the app only through the
   stub. The simulator runs the real model only if the host Mac has Apple
@@ -277,6 +310,13 @@ Not verified, and worth knowing:
   transcript is in and the title and summary update it a moment later,
   because a summary that takes ten seconds should not hold the recording
   hostage, and one that fails should not mark the recording as failed.
+- **The shared core stays copied, for now.** The platform-neutral files
+  (catalog, transport, manager, engine, trimmer, formatter) were copied
+  from the Mac app in M2 and have already diverged in small ways: no
+  Hugging Face cache, a staging folder for downloads, a different
+  default model. A shared package would need those as options. Until
+  one repository has to pick up a fix from the other, the copy costs
+  nothing; the first such fix is the signal to extract.
 - **Integration tests are host-only.** They need `say` for speech and the
   package builds for macOS so `swift test` runs without a simulator. A
   device run is a manual step until there is a fixture clip.

@@ -16,6 +16,7 @@ public struct RootView: View {
     @State private var path: [Recording.ID] = []
     @State private var showingSettings = false
     @State private var showingRecorder = false
+    @State private var activity = RecordingActivityController()
     private let initialScreen: InitialScreen
 
     public init(initialScreen: InitialScreen = .library) {
@@ -51,6 +52,9 @@ public struct RootView: View {
                 showingRecorder = false
                 if let id { path = [id] }
             }
+        }
+        .onChange(of: model.capture.state, initial: true) { _, state in
+            activity.update(for: state, maxSeconds: model.capture.maxSeconds)
         }
     }
 }

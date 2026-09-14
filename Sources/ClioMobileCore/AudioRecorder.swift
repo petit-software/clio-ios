@@ -18,11 +18,27 @@ public struct CaptureResult: Sendable, Equatable {
     }
 }
 
+/// Something that happened to the microphone while a capture was running.
+public enum CaptureEvent: Sendable, Equatable {
+    /// The system took the microphone: a phone call, Siri, another app.
+    /// Capture is paused; nothing is lost, nothing is added.
+    case interrupted
+    /// The interruption is over. `resumed` says whether capture picked up
+    /// again; if not, what was captured so far is all there will be.
+    case interruptionEnded(resumed: Bool)
+    /// The route changed (headphones unplugged, a headset went away) and
+    /// the engine could not be restarted on the new one.
+    case lost(String)
+}
+
 /// The microphone, behind a protocol so the state machine can be tested
 /// on a simulated one and previews never touch audio hardware.
 public protocol AudioCapturing: AnyObject, Sendable {
     /// Ask for the microphone. True if granted, now or earlier.
     func requestPermission() async -> Bool
+    /// Called from an arbitrary thread when the system interferes with a
+    /// running capture. The controller turns these into states.
+    var onEvent: (@Sendable (CaptureEvent) -> Void)? { get set }
     /// Start capturing. Returns once the hardware is running.
     func start(maxSeconds: Double) async throws
     /// Stop and hand back everything captured.
@@ -94,7 +110,17 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var converterInput: AVAudioFormat?
 
+    // Guarded by `lock`.
+    private var eventHandler: (@Sendable (CaptureEvent) -> Void)?
+    private var isInterrupted = false
+    private var observers: [any NSObjectProtocol] = []
+
     public init() {}
+
+    public var onEvent: (@Sendable (CaptureEvent) -> Void)? {
+        get { lock.withLock { eventHandler } }
+        set { lock.withLock { eventHandler = newValue } }
+    }
 
     // MARK: Permission
 
@@ -148,7 +174,11 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
             }
         }.value
 
-        lock.withLock { isRunning = true }
+        lock.withLock {
+            isRunning = true
+            isInterrupted = false
+        }
+        observeSystem()
     }
 
     public func stop() async -> CaptureResult {
@@ -239,8 +269,12 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         lock.lock()
         let wasRunning = isRunning
         isRunning = false
+        isInterrupted = false
         currentLevel = 0
+        let observers = self.observers
+        self.observers = []
         lock.unlock()
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
         guard wasRunning else { return }
         _ = ObjCException.catching { self.engine.inputNode.removeTap(onBus: 0) }
         _ = ObjCException.catching { self.engine.stop() }
@@ -251,6 +285,105 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         // session, and deactivating with .notifyOthersOnDeactivation is what
         // resumes the music the user had going. Playback ends it.
         #endif
+    }
+
+    // MARK: Interruptions and route changes
+
+    /// Two things the system does to a running engine, and what is done
+    /// about each.
+    ///
+    /// An interruption (a call, Siri, another app taking the microphone)
+    /// stops the engine. The buffer and the tap survive it, so when the
+    /// interruption ends the engine is started again and capture carries
+    /// on into the same buffer — with a gap where the call was, which is
+    /// what happened. If it cannot be restarted, the controller ends the
+    /// recording with what it has.
+    ///
+    /// A route change (headphones unplugged, a headset going out of range)
+    /// makes the engine post a configuration change and stop. The tap has
+    /// no format of its own, so it follows the new hardware; the converter
+    /// is rebuilt from the next buffer's format. Only the engine needs
+    /// starting again.
+    private func observeSystem() {
+        let center = NotificationCenter.default
+        var added: [any NSObjectProtocol] = []
+
+        #if os(iOS)
+        added.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(), queue: nil
+        ) { [weak self] notification in
+            self?.handleInterruption(notification)
+        })
+        #endif
+
+        added.append(center.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine, queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange()
+        })
+
+        lock.withLock { observers = added }
+    }
+
+    private func handleInterruption(_ notification: Notification) {
+        #if os(iOS)
+        guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw)
+        else { return }
+
+        switch type {
+        case .began:
+            let handler: (@Sendable (CaptureEvent) -> Void)? = lock.withLock {
+                guard isRunning, !isInterrupted else { return nil }
+                isInterrupted = true
+                currentLevel = 0
+                return eventHandler
+            }
+            handler?(.interrupted)
+
+        case .ended:
+            let handler: (@Sendable (CaptureEvent) -> Void)? = lock.withLock {
+                guard isRunning, isInterrupted else { return nil }
+                return eventHandler
+            }
+            guard handler != nil else { return }
+            let resumed = restartEngine()
+            lock.withLock { isInterrupted = !resumed }
+            handler?(.interruptionEnded(resumed: resumed))
+
+        @unknown default:
+            break
+        }
+        #endif
+    }
+
+    private func handleConfigurationChange() {
+        let handler: (@Sendable (CaptureEvent) -> Void)? = lock.withLock {
+            guard isRunning, !isInterrupted else { return nil }
+            return eventHandler
+        }
+        // Not running, or interrupted: the interruption's end restarts the
+        // engine, and a stopped one has nothing to restart.
+        guard handler != nil || lock.withLock({ isRunning && !isInterrupted }) else { return }
+        if !restartEngine() {
+            lock.withLock { currentLevel = 0 }
+            handler?(.lost("The microphone changed and could not be restarted."))
+        }
+    }
+
+    /// Start the engine again on whatever hardware is there now. The tap
+    /// stays installed; the buffer keeps its place.
+    private func restartEngine() -> Bool {
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(true)
+        #endif
+        var startError: (any Error)?
+        let raised = ObjCException.catching {
+            do { try engine.start() } catch { startError = error }
+        }
+        return raised == nil && startError == nil && engine.isRunning
     }
 
     // MARK: The tap
@@ -405,6 +538,7 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
     public private(set) var startCount = 0
     public private(set) var stopCount = 0
     public private(set) var cancelCount = 0
+    private var eventHandler: (@Sendable (CaptureEvent) -> Void)?
 
     public init(permissionGranted: Bool = true, startError: Error? = nil) {
         self.permissionGranted = permissionGranted
@@ -412,6 +546,16 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
     }
 
     public func requestPermission() async -> Bool { permissionGranted }
+
+    public var onEvent: (@Sendable (CaptureEvent) -> Void)? {
+        get { lock.withLock { eventHandler } }
+        set { lock.withLock { eventHandler = newValue } }
+    }
+
+    /// What a phone call, or a headset walking off, would do.
+    public func simulate(_ event: CaptureEvent) {
+        onEvent?(event)
+    }
 
     public func start(maxSeconds: Double) async throws {
         if let startError { throw startError }

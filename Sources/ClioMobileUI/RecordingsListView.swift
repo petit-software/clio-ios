@@ -31,14 +31,10 @@ struct RecordingsListView: View {
             }
         }
         .navigationTitle("Recordings")
-        .searchable(text: $query, prompt: "Search transcripts")
-        .toolbar {
-            // The bottom bar, where iOS 26 also puts the search field, so
-            // the two controls that matter share one row.
-            ToolbarItem(placement: .recordButtonPlacement) {
-                RecordButton(action: onRecord)
-            }
-        }
+        // Under the title, not in the bottom bar where iOS 26 would put it:
+        // the bottom belongs to the record button alone.
+        .searchable(text: $query, placement: .searchPlacement, prompt: "Search transcripts")
+        .recordBar { RecordButton(action: onRecord) }
     }
 
     private var list: some View {
@@ -135,22 +131,54 @@ struct RecordingRow: View {
     }
 }
 
-/// The one control that matters. Large, red, centred, and labelled so
-/// nobody has to guess.
+/// The one control that matters. The full width of the bottom bar, red,
+/// and a word rather than a symbol: a toolbar item on iOS 26 collapses a
+/// labelled button to its glyph, and a lone microphone is a guess, so
+/// this is not a toolbar item — see `recordBar`.
 struct RecordButton: View {
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label("Record", systemImage: "mic.fill")
+            Text("Record")
                 .font(.title3.weight(.semibold))
-                .padding(.horizontal, 28)
-                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
         }
-        .buttonStyle(.borderedProminent)
+        .prominentStyle()
         .buttonBorderShape(.capsule)
         .tint(.red)
+        .controlSize(.large)
         .accessibilityHint("Starts a new recording")
+    }
+}
+
+private extension View {
+    /// Liquid Glass on iOS 26, the plain filled capsule before it.
+    @ViewBuilder
+    func prominentStyle() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            buttonStyle(.glassProminent)
+        } else {
+            buttonStyle(.borderedProminent)
+        }
+    }
+
+    /// The bar the record button sits in: the bottom of the screen, above
+    /// the home indicator, with the list scrolling under it. `safeAreaBar`
+    /// is what iOS 26 uses for its own bottom bars — the content gets the
+    /// scroll-edge treatment — and `safeAreaInset` is the same idea on 18.
+    @ViewBuilder
+    func recordBar<Bar: View>(@ViewBuilder _ bar: @escaping () -> Bar) -> some View {
+        let content = bar()
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        if #available(iOS 26, macOS 26, *) {
+            safeAreaBar(edge: .bottom) { content }
+        } else {
+            safeAreaInset(edge: .bottom) { content }
+        }
     }
 }
 
@@ -176,12 +204,10 @@ struct RecordButton: View {
         models: PreviewData.models(installed: [], downloads: [:], failures: [:])))
 }
 
-private extension ToolbarItemPlacement {
-    /// The bottom bar does not exist on macOS, where the package is also
-    /// built for tests.
-    static var recordButtonPlacement: ToolbarItemPlacement {
+private extension SearchFieldPlacement {
+    static var searchPlacement: SearchFieldPlacement {
         #if os(iOS)
-        .bottomBar
+        .navigationBarDrawer(displayMode: .always)
         #else
         .automatic
         #endif

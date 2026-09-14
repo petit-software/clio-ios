@@ -35,8 +35,9 @@ CLIO_INTEGRATION=1 swift test --filter Integration   # downloads ~81 MB, real Wh
 
 ## Status
 
-Milestone 3: Whisper via WhisperKit on models downloaded from Hugging Face
-in Settings ▸ Model, and titles and summaries from Apple's on-device
-language model on phones with iOS 26 and Apple Intelligence. Both are
-proven on the host by the integration tests; the first run on a phone is
-still ahead. Polish and TestFlight are milestone 4.
+Milestone 4: Whisper via WhisperKit on models downloaded from Hugging Face,
+titles and summaries from Apple's on-device language model where the phone
+has one, interruption handling, a Live Activity while recording, the app
+icon, and a privacy manifest. Everything is proven on the host and the
+simulator; the first run on a phone is still ahead, and TestFlight follows
+it.

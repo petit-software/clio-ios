@@ -22,7 +22,7 @@ struct RecordView: View {
                 .contentTransition(.numericText())
                 .accessibilityLabel("Elapsed \(Format.duration(capture.elapsed))")
 
-            LevelMeter(level: capture.level, active: capture.state == .recording)
+            LevelMeter(level: capture.level, active: capture.state.isCapturing)
                 .frame(height: 96)
                 .padding(.horizontal, 32)
 
@@ -59,6 +59,17 @@ struct RecordView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        case .interrupted:
+            VStack(spacing: 6) {
+                Label("Paused", systemImage: "pause.circle.fill")
+                    .foregroundStyle(.orange)
+                Text("Another app has the microphone. Recording resumes when it lets go, "
+                     + "or stop now to keep what you have.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
         case .transcribing:
             HStack(spacing: 8) {
                 ProgressView()
@@ -83,7 +94,7 @@ struct RecordView: View {
     @ViewBuilder
     private func controls(_ capture: CaptureController) -> some View {
         switch capture.state {
-        case .starting, .recording:
+        case .starting, .recording, .interrupted:
             HStack(spacing: 48) {
                 Button("Cancel", systemImage: "xmark") {
                     Task { await cancel() }
@@ -104,7 +115,7 @@ struct RecordView: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
                 .tint(.red)
-                .disabled(capture.state != .recording)
+                .disabled(!capture.state.isCapturing)
                 .accessibilityLabel("Stop recording")
 
                 // Keeps the stop button centred.
@@ -136,15 +147,21 @@ struct RecordView: View {
     private func start() async {
         await model.capture.start()
         if model.capture.state == .recording {
-            Haptics.recordStarted()
+            haptic(Haptics.recordStarted)
         } else if case .failed = model.capture.state {
-            Haptics.failure()
+            haptic(Haptics.failure)
         }
     }
 
     private func stop() async {
-        Haptics.recordStopped()
+        haptic(Haptics.recordStopped)
         await model.capture.stop()
+    }
+
+    /// Settings ▸ Recording ▸ Haptic feedback.
+    private func haptic(_ play: @MainActor () -> Void) {
+        guard model.settings.settings.hapticFeedback else { return }
+        play()
     }
 
     private func cancel() async {
@@ -188,6 +205,17 @@ struct LevelMeter: View {
 #Preview("Recording") {
     RecordView(onFinished: { _ in })
         .environment(AppModel.simulating())
+}
+
+#Preview("Paused by a call") {
+    let recorder = SimulatedRecorder()
+    let model = AppModel.simulating(recorder: recorder)
+    RecordView(onFinished: { _ in })
+        .environment(model)
+        .task {
+            try? await Task.sleep(for: .milliseconds(500))
+            recorder.simulate(.interrupted)
+        }
 }
 
 #Preview("Failed") {

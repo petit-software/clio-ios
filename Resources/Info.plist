@@ -48,6 +48,10 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!-- The recording shows on the Lock Screen and in the Dynamic Island
+	     while it runs; see ClioMobileWidget. -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Clio records your voice so it can be transcribed on this device. Audio never leaves your phone.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

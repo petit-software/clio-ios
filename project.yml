@@ -29,6 +29,9 @@ targets:
     platform: iOS
     sources:
       - path: Sources/ClioMobileApp
+      - path: Resources/Assets.xcassets
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
       - path: Resources/Info.plist
         buildPhase: none
       # Visible in the navigator, built through the package.
@@ -49,12 +52,15 @@ targets:
     dependencies:
       - package: ClioMobile
         product: ClioMobileUI
+      - target: ClioWidget
+        embed: true
     settings:
       base:
         PRODUCT_NAME: Clio
         PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
         CODE_SIGN_STYLE: Automatic
@@ -70,11 +76,35 @@ targets:
           SWIFT_OPTIMIZATION_LEVEL: -O
           DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
 
+  # The Live Activity: a WidgetKit extension with one ActivityConfiguration.
+  # Depends only on the attributes module, so it does not carry WhisperKit.
+  ClioWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/ClioMobileWidget
+    dependencies:
+      - package: ClioMobile
+        product: ClioMobileActivity
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_NAME: ClioWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios.widget
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Sources/ClioMobileWidget/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: TJ3ALYQV5G
+
 schemes:
   Clio:
     build:
       targets:
         Clio: all
+        ClioWidget: all
     run:
       config: Debug
     test:

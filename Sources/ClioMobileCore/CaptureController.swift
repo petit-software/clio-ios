@@ -5,21 +5,32 @@ import Observation
 ///
 /// ```
 /// idle ──record──▶ recording ──stop──▶ transcribing ──▶ idle (+ a Recording in the store)
-///   ▲                  │                    │
+///   ▲                  │  ▲                 │
+///   │           call   │  │ call ended      │
+///   │                  ▼  │                 │
+///   │              interrupted ──stop───────┤
 ///   └───── cancel ─────┴──── cancel ────────┘
 /// ```
 public enum CaptureState: Sendable, Equatable {
     case idle
     case starting
     case recording
+    /// A call, Siri, or another app has the microphone. Nothing is being
+    /// captured; the recording resumes when they let go, or stops here.
+    case interrupted
     case transcribing
     case failed(String)
 
     public var isBusy: Bool {
         switch self {
-        case .starting, .recording, .transcribing: return true
+        case .starting, .recording, .interrupted, .transcribing: return true
         case .idle, .failed: return false
         }
+    }
+
+    /// Recording, or paused mid-recording: the stop button applies.
+    public var isCapturing: Bool {
+        self == .recording || self == .interrupted
     }
 
     public var label: String {
@@ -27,6 +38,7 @@ public enum CaptureState: Sendable, Equatable {
         case .idle: return ""
         case .starting: return "Starting…"
         case .recording: return "Listening"
+        case .interrupted: return "Paused"
         case .transcribing: return "Transcribing…"
         case .failed(let message): return message
         }
@@ -76,6 +88,28 @@ public final class CaptureController {
         self.intelligence = intelligence
         models.onInstalledChanged = { [weak self] in self?.reconcileActiveModel() }
         reconcileActiveModel()
+        recorder.onEvent = { [weak self] event in
+            Task { @MainActor [weak self] in await self?.handle(event) }
+        }
+    }
+
+    // MARK: System events
+
+    /// The microphone was taken away, or given back. See `CaptureEvent`.
+    private func handle(_ event: CaptureEvent) async {
+        switch (event, state) {
+        case (.interrupted, .recording):
+            state = .interrupted
+        case (.interruptionEnded(resumed: true), .interrupted):
+            state = .recording
+        case (.interruptionEnded(resumed: false), .interrupted),
+             (.lost, .recording), (.lost, .interrupted):
+            // What was captured is kept and transcribed; there will be no
+            // more.
+            await stop()
+        default:
+            break
+        }
     }
 
     public var maxSeconds: Double { settings.settings.maxRecordingSeconds }
@@ -153,7 +187,7 @@ public final class CaptureController {
     }
 
     public func stop() async {
-        guard state == .recording else { return }
+        guard state.isCapturing else { return }
         stopPolling()
         state = .transcribing
         let result = await recorder.stop()
@@ -163,7 +197,7 @@ public final class CaptureController {
 
     public func cancel() async {
         switch state {
-        case .starting, .recording:
+        case .starting, .recording, .interrupted:
             stopPolling()
             await recorder.cancel()
             state = .idle

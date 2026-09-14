@@ -225,6 +225,100 @@ struct CaptureTests {
         #expect(await controller.engine.isLoaded == false, "warm-up respects the setting too")
     }
 
+    @Test("A call pauses the recording and it resumes when the call ends")
+    @MainActor
+    func interruptionResumes() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        recorder.simulate(.interrupted)
+        try await settle()
+        #expect(controller.state == .interrupted)
+        #expect(controller.state.isBusy)
+
+        recorder.simulate(.interruptionEnded(resumed: true))
+        try await settle()
+        #expect(controller.state == .recording)
+
+        await controller.stop()
+        #expect(library.recordings.count == 1)
+    }
+
+    @Test("A call the recorder cannot come back from ends the recording with what it has")
+    @MainActor
+    func interruptionEnds() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        recorder.simulate(.interrupted)
+        try await settle()
+        recorder.simulate(.interruptionEnded(resumed: false))
+        try await settle(until: { controller.state == .idle })
+
+        #expect(recorder.stopCount == 1)
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .transcribed)
+        #expect(abs(recording.duration - 2) < 0.01)
+    }
+
+    @Test("Stopping while paused works, and so does cancelling")
+    @MainActor
+    func stopWhileInterrupted() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 1
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        recorder.simulate(.interrupted)
+        try await settle()
+        await controller.stop()
+        #expect(library.recordings.count == 1)
+
+        await controller.start()
+        recorder.simulate(.interrupted)
+        try await settle()
+        await controller.cancel()
+        #expect(controller.state == .idle)
+        #expect(recorder.cancelCount == 1)
+        #expect(library.recordings.count == 1)
+    }
+
+    @Test("Losing the microphone mid-recording keeps what was captured")
+    @MainActor
+    func microphoneLost() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 3
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        recorder.simulate(.lost("headset gone"))
+        try await settle(until: { controller.state == .idle })
+        let recording = try #require(library.recordings.first)
+        #expect(abs(recording.duration - 3) < 0.01)
+
+        // An event with nothing running is ignored.
+        recorder.simulate(.interrupted)
+        try await settle()
+        #expect(controller.state == .idle)
+    }
+
+    /// Events arrive through a hop to the main actor; give it a turn.
+    @MainActor
+    private func settle(until condition: () -> Bool = { true }) async throws {
+        for _ in 0..<100 {
+            try await Task.sleep(for: .milliseconds(10))
+            if condition() { return }
+        }
+    }
+
     @Test("The stored selection follows what is installed")
     @MainActor
     func reconcilesActiveModel() async throws {
