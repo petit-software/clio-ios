@@ -35,6 +35,33 @@ public final class RecordingStore {
         return store
     }
 
+    /// The same, with audio that plays: a tone per recording, as long as the
+    /// recording says it is, in a temporary folder. For looking at playback
+    /// and tap-to-seek on a simulator without a microphone. The index is
+    /// still never written.
+    public static func simulatingWithAudio(_ recordings: [Recording] = []) -> RecordingStore {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clio-simulated-audio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let store = RecordingStore(indexURL: root.appendingPathComponent("never-written.json"),
+                                   audioDirectory: root)
+        store.recordings = recordings.sorted { $0.createdAt > $1.createdAt }
+        for recording in recordings where recording.duration > 0 {
+            let url = store.audioURL(for: recording)
+            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
+            // A quiet tone that rises through the clip, so the ear can tell
+            // where a seek landed.
+            let count = Int(recording.duration * AudioRecorder.sampleRate)
+            let samples = (0..<count).map { i -> Float in
+                let t = Float(i) / Float(AudioRecorder.sampleRate)
+                let hz = 220 + 220 * t / Float(recording.duration)
+                return 0.08 * sin(2 * .pi * hz * t)
+            }
+            try? AudioFiles.write(samples, to: url)
+        }
+        return store
+    }
+
     public subscript(id: Recording.ID) -> Recording? {
         recordings.first { $0.id == id }
     }

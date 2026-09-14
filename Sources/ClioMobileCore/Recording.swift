@@ -19,6 +19,9 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
     /// Also from the model. Shown when the user has not named the
     /// recording; never overwrites a name they typed.
     public var generatedTitle: String?
+    /// The transcript with times, for tap-to-seek. Empty for recordings
+    /// made before there were any, and the transcript text still stands.
+    public var segments: [TranscriptSegment]
     /// The file name inside `AppPaths.recordingsDirectory`. Relative on
     /// purpose: the sandbox container moves between installs and backups,
     /// so an absolute path stored today is wrong tomorrow.
@@ -34,6 +37,7 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
                 modelID: String? = nil,
                 summary: String? = nil,
                 generatedTitle: String? = nil,
+                segments: [TranscriptSegment] = [],
                 audioFileName: String? = nil,
                 status: TranscriptStatus = .transcribed) {
         self.id = id
@@ -45,6 +49,7 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.modelID = modelID
         self.summary = summary
         self.generatedTitle = generatedTitle
+        self.segments = segments
         self.audioFileName = audioFileName ?? "\(id.uuidString).wav"
         self.status = status
     }
@@ -73,6 +78,7 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
         modelID = readOptional(.modelID, String.self)
         summary = readOptional(.summary, String.self)
         generatedTitle = readOptional(.generatedTitle, String.self)
+        segments = read(.segments, [])
         status = read(.status, .transcribed)
     }
 

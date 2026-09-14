@@ -35,9 +35,10 @@ CLIO_INTEGRATION=1 swift test --filter Integration   # downloads ~81 MB, real Wh
 
 ## Status
 
-Milestone 4: Whisper via WhisperKit on models downloaded from Hugging Face,
+Milestone 5: Whisper via WhisperKit on models downloaded from Hugging Face,
 titles and summaries from Apple's on-device language model where the phone
-has one, interruption handling, a Live Activity while recording, the app
-icon, and a privacy manifest. Everything is proven on the host and the
+has one, a transcript whose sentences can be tapped to play, "Record with
+Clio" from Siri and the Action button, interruption handling, a Live
+Activity while recording. Everything is proven on the host and the
 simulator; the first run on a phone is still ahead, and TestFlight follows
 it.

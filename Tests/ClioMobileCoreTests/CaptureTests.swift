@@ -57,6 +57,35 @@ struct CaptureTests {
         #expect(samples.count == Int(2 * AudioRecorder.sampleRate))
     }
 
+    @Test("Segments are stored, shifted by the silence trimmed off the front")
+    @MainActor
+    func segmentsAreOffset() async throws {
+        // One second of silence, then two seconds of tone: the trimmer cuts
+        // most of the first second, and the segments move by that much.
+        let silence = [Float](repeating: 0, count: Int(AudioRecorder.sampleRate))
+        let tone = (0..<Int(2 * AudioRecorder.sampleRate)).map { i in
+            0.1 * sin(2 * .pi * 440 * Float(i) / Float(AudioRecorder.sampleRate))
+        }
+        let recorder = SimulatedRecorder()
+        recorder.samples = silence + tone
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.segments.count == 2)
+        let first = try #require(recording.segments.first)
+        #expect(first.start > 0.7 && first.start < 1.0, "shifted by the trimmed lead")
+        #expect(recording.transcript == recording.segments.map(\.text).joined(separator: " "))
+        #expect(recording.transcript.hasPrefix("[Clio stub]"))
+
+        // The index carries them.
+        let reloaded = RecordingStore(indexURL: directory.appendingPathComponent("r.json"),
+                                      audioDirectory: directory)
+        #expect(reloaded[recording.id]?.segments == recording.segments)
+    }
+
     @Test("Cancel while recording throws it away")
     @MainActor
     func cancelWhileRecording() async throws {

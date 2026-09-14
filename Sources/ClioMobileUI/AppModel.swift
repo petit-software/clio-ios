@@ -51,6 +51,7 @@ public final class AppModel {
 
     public static func simulating(
         recordings: [Recording] = PreviewData.recordings,
+        audio: Bool = false,
         settings: Settings = Settings(),
         models: ModelManager = PreviewData.models(),
         recorder: any AudioCapturing = SimulatedRecorder(),
@@ -58,7 +59,7 @@ public final class AppModel {
         summarizer: any SummaryEngine = StubSummaryEngine(latency: .seconds(1))
     ) -> AppModel {
         AppModel(settings: .simulating(settings),
-                 library: .simulating(recordings),
+                 library: audio ? .simulatingWithAudio(recordings) : .simulating(recordings),
                  models: models,
                  recorder: recorder,
                  engine: engine,

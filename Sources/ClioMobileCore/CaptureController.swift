@@ -290,6 +290,9 @@ public final class CaptureController {
         // 30-second window, and hallucinates words over silence; cutting the
         // quiet at either end is both a speed and a quality fix.
         var samples = captured
+        // Segment times come back relative to what the engine heard; the
+        // file on disk still has the silence in front.
+        var leadingOffset: TimeInterval = 0
         if current.voiceActivityDetection {
             guard let trimmed = VoiceActivityTrimmer.trim(
                 captured, sensitivity: current.vadSensitivity) else {
@@ -298,6 +301,7 @@ public final class CaptureController {
                 return
             }
             samples = trimmed.samples
+            leadingOffset = trimmed.trimmedLeadingSeconds
         }
 
         let options = TranscribeOptions(
@@ -309,8 +313,15 @@ public final class CaptureController {
         do {
             try await engine.load(model: model)
             let transcript = try await engine.transcribe(samples: samples, options: options)
-            let text = TranscriptFormatter.format(transcript.text, settings: current)
+            let segments = TranscriptFormatter.format(transcript.segments, settings: current)
+                .map { $0.offset(by: leadingOffset) }
+            // With timings, the text is the segments joined, so the two
+            // never disagree about a word.
+            let text = segments.isEmpty
+                ? TranscriptFormatter.format(transcript.text, settings: current)
+                : segments.map(\.text).joined(separator: " ")
             recording.transcript = text
+            recording.segments = segments
             recording.language = transcript.language
             recording.status = text.isEmpty ? .nothingHeard : .transcribed
         } catch is CancellationError {

@@ -62,6 +62,10 @@ struct RecordingDetailView: View {
                     ShareLink(item: shareText(recording)) {
                         Label("Share Transcript", systemImage: "square.and.arrow.up")
                     }
+                    ShareLink(item: model.library.audioURL(for: recording)) {
+                        Label("Share Audio", systemImage: "waveform")
+                    }
+                    .disabled(!player.isAvailable)
                     Button("Copy Transcript", systemImage: "doc.on.doc") {
                         copy(recording.transcript)
                     }
@@ -100,6 +104,9 @@ struct RecordingDetailView: View {
         .onAppear {
             title = recording.displayTitle
             player.load(model.library.audioURL(for: recording))
+            #if DEBUG
+            if LaunchOptions.autoplay { player.play() }
+            #endif
         }
         .onDisappear { player.stop() }
         .onChange(of: title) { _, newValue in
@@ -128,9 +135,20 @@ struct RecordingDetailView: View {
     private func transcript(_ recording: Recording) -> some View {
         switch recording.status {
         case .transcribed:
-            Text(recording.transcript)
-                .textSelection(.enabled)
+            if recording.segments.isEmpty {
+                Text(recording.transcript)
+                    .textSelection(.enabled)
+                    .padding(.vertical, 4)
+            } else {
+                SegmentedTranscript(segments: recording.segments,
+                                    currentTime: player.isPlaying || player.currentTime > 0
+                                        ? player.currentTime : nil) { time in
+                    guard player.isAvailable else { return }
+                    player.seek(to: time)
+                    if !player.isPlaying { player.play() }
+                }
                 .padding(.vertical, 4)
+            }
         case .nothingHeard:
             Label("Nothing was heard in this recording.", systemImage: "waveform.slash")
                 .foregroundStyle(.secondary)
@@ -229,6 +247,49 @@ private extension View {
         #else
         self
         #endif
+    }
+}
+
+// MARK: - Segments
+
+/// The transcript as one flowing paragraph whose sentences can be tapped.
+///
+/// Each segment is a link in one attributed string, so the text wraps like
+/// prose rather than stacking a view per sentence; the tap arrives through
+/// `openURL` with the segment's start time. The sentence being played is
+/// tinted, which is how the eye follows the audio.
+struct SegmentedTranscript: View {
+    let segments: [TranscriptSegment]
+    let currentTime: TimeInterval?
+    let onSeek: (TimeInterval) -> Void
+
+    var body: some View {
+        Text(attributed)
+            .environment(\.openURL, OpenURLAction { url in
+                guard url.scheme == Self.scheme,
+                      let seconds = TimeInterval(url.host() ?? "") else { return .discarded }
+                onSeek(seconds)
+                return .handled
+            })
+            .accessibilityHint("Tap a sentence to play it")
+    }
+
+    private static let scheme = "clio-seek"
+
+    private var attributed: AttributedString {
+        var result = AttributedString()
+        for (index, segment) in segments.enumerated() {
+            var piece = AttributedString(segment.text)
+            piece.link = URL(string: "\(Self.scheme)://\(segment.start)")
+            piece.foregroundColor = .primary
+            if let currentTime, segment.contains(currentTime) {
+                piece.backgroundColor = Color.accentColor.opacity(0.22)
+                piece.foregroundColor = .accentColor
+            }
+            result.append(piece)
+            if index < segments.count - 1 { result.append(AttributedString(" ")) }
+        }
+        return result
     }
 }
 

@@ -16,7 +16,15 @@ public enum PreviewData {
                       language: "en", modelID: "openai_whisper-small_216MB",
                       summary: "Move the dentist appointment to Thursday and check whether "
                         + "the March invoice was sent. The balcony door still sticks in the heat.",
-                      generatedTitle: "Dentist, invoice, balcony door"),
+                      generatedTitle: "Dentist, invoice, balcony door",
+                      segments: [
+                        TranscriptSegment(start: 0.8, end: 5.2,
+                                          text: "Remember to move the dentist appointment to Thursday,"),
+                        TranscriptSegment(start: 5.2, end: 9.9,
+                                          text: "and ask whether the invoice for March was ever sent."),
+                        TranscriptSegment(start: 11.0, end: 14.6,
+                                          text: "Also the balcony door still sticks in the heat."),
+                      ]),
             Recording(createdAt: ago(3 * 3600), duration: 312,
                       title: "Standup notes",
                       transcript: "The migration ran clean on staging. Two flaky tests "

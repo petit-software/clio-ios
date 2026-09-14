@@ -157,7 +157,7 @@ Apple Foundation Models, iOS 26+, Apple Intelligence on.
 Proves: an LLM can run over a transcript without the transcript leaving
 the phone.
 
-### M4 — polish and ship  ← this milestone
+### M4 — polish and ship  ✓
 
 - Interruptions and route changes: the recorder observes the audio
   session and the engine. A call or Siri pauses capture into an
@@ -192,6 +192,33 @@ the phone.
 
 Ships: a TestFlight build, once it has been run on a phone.
 
+### M5 — the transcript is the recording  ← this milestone
+
+Two things a memo app needs that the loop did not give: a way from a
+sentence back to the sound of it, and a way to start recording without
+finding the app first.
+
+- `TranscriptSegment` — start, end, text — from WhisperKit's segments,
+  with the special tokens stripped and the times shifted by whatever the
+  trimmer cut off the front, so they index the file on disk. Stored on the
+  recording; the transcript text is the segments joined, so the two never
+  disagree. Recordings from before decode with no segments and behave as
+  they did.
+- `TranscriptFormatter.format(_:settings:)` over segments: replacements in
+  each, the capital on the first, the trailing punctuation off the last
+- Detail view: the transcript is one paragraph of tappable sentences. Tap
+  one and playback jumps there; the sentence being played is tinted as
+  the audio moves through it. Built as one attributed string of links so
+  it wraps like prose; the tap arrives through `openURL`.
+- Share the audio file, beside sharing the text
+- `StartRecordingIntent` and an App Shortcut: "Record with Clio" from
+  Siri, Shortcuts, Spotlight, and the Action button. The intent opens the
+  app and hands the root view a pending action.
+- The stub engine returns two segments, so previews and tests can seek
+
+Proves: the transcript and the audio are one thing, and the app can be
+started by voice or button without a tap in between.
+
 ## Looking at it
 
 Any screen can be put on a simulator without tapping through to it, on
@@ -210,12 +237,22 @@ xcrun simctl io booted screenshot record.png
 ```
 
 `CLIO_SIMULATE=1` runs on fixed recordings, a fake microphone and the stub
-engine, touching nothing on disk. `CLIO_SHOW` is `record`, `settings` or
-`detail`. Debug builds only.
+engine; the only thing it writes is a synthesized tone per recording in a
+temporary folder, so playback and tap-to-seek work. `CLIO_SHOW` is
+`record`, `settings` or `detail`; `CLIO_AUTOPLAY=1` starts playback when
+the detail view appears. Debug builds only.
 
 ## What is proven, and what is not
 
-Verified by something repeatable, as of milestone 4:
+Verified by something repeatable, as of milestone 5:
+
+- segments come through the loop shifted by the trimmed lead, the
+  transcript equals their join, and they survive the index; the
+  formatter's per-segment rules; special-token stripping
+- playback of a real WAV on the simulator, and the highlighted sentence
+  following the scrubber through the segments (`CLIO_AUTOPLAY=1`)
+- the real model's segments on the host: one segment for a short clip,
+  inside the clip, no special tokens
 
 - the capture state machine through an interruption: paused, resumed,
   ended when the recorder cannot resume, stop and cancel while paused,
@@ -248,6 +285,12 @@ Verified by something repeatable, as of milestone 4:
 
 Not verified, and worth knowing:
 
+- **Segment times from the real model.** The stub's segments are exact by
+  construction. WhisperKit's are what Whisper's timestamp tokens say,
+  which is usually within a few hundred milliseconds; whether a tap lands
+  on the right word is a listening test.
+- **The intent from the Action button.** The intent and shortcut build;
+  Siri and the Action button need a device to try.
 - **A real phone call.** The interruption path is proven on simulated
   events; whether `AVAudioEngine` restarts cleanly after a call on a
   device, and whether the gap in the buffer is where the call was, is a
@@ -274,8 +317,6 @@ Not verified, and worth knowing:
   recorder, but no one has recorded through it on a phone or a simulator.
   The permission prompt cannot be answered from `simctl`; the first run on a
   device is the test.
-- **playback of a real file.** The player has only been drawn against a
-  missing file.
 - **background downloads across a relaunch.** Downloads go through a
   background `URLSession` (`BackgroundDownloader`), so a locked screen
   does not end them; each task carries its destination and checksum so

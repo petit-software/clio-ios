@@ -31,6 +31,29 @@ struct FormatterTests {
         #expect(TranscriptFormatter.format("fine", settings: settings) == "Fine")
     }
 
+    @Test("Segments get the same treatment as the whole, piece by piece")
+    func segments() {
+        var settings = Settings()
+        settings.trimTrailingPunctuation = true
+        settings.wordReplacements = [WordReplacement(find: "clio", replace: "Clio")]
+        let raw = [
+            TranscriptSegment(start: 0, end: 2, text: " so clio said "),
+            TranscriptSegment(start: 2, end: 3, text: "   "),
+            TranscriptSegment(start: 3, end: 5, text: "that it works."),
+        ]
+        let formatted = TranscriptFormatter.format(raw, settings: settings)
+        #expect(formatted.map(\.text) == ["So Clio said", "that it works"])
+        #expect(formatted.map(\.start) == [0, 3], "the empty one is dropped, times kept")
+        #expect(TranscriptFormatter.format([], settings: settings).isEmpty)
+    }
+
+    @Test("Whisper's special tokens are stripped from segment text")
+    func specialTokens() {
+        #expect(TranscriptFormatter.strippingSpecialTokens("<|0.00|> Hello there.<|2.40|>") == "Hello there.")
+        #expect(TranscriptFormatter.strippingSpecialTokens("<|startoftranscript|><|en|><|transcribe|>") == "")
+        #expect(TranscriptFormatter.strippingSpecialTokens("plain") == "plain")
+    }
+
     @Test("Vocabulary becomes a comma-separated prompt, or nothing")
     func prompt() {
         #expect(TranscriptFormatter.initialPrompt(from: [" Clio ", "", "WhisperKit"]) == "Clio, WhisperKit")

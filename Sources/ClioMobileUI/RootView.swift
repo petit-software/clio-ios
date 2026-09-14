@@ -56,6 +56,16 @@ public struct RootView: View {
         .onChange(of: model.capture.state, initial: true) { _, state in
             activity.update(for: state, maxSeconds: model.capture.maxSeconds)
         }
+        .onChange(of: AppActions.shared.pending, initial: true) { _, action in
+            guard let action else { return }
+            AppActions.shared.pending = nil
+            switch action {
+            case .record:
+                showingSettings = false
+                path = []
+                showingRecorder = true
+            }
+        }
     }
 }
 
@@ -89,16 +99,23 @@ private extension View {
 ///         -e CLIO_SIMULATE=1 -e CLIO_SHOW=detail
 ///
 /// `CLIO_SIMULATE=1` runs the app on simulated dependencies — fixed
-/// recordings, a fake microphone, the stub engine, nothing on disk — and
-/// `CLIO_SHOW` is one of `record`, `settings`, `detail`. The Mac app has
-/// the same kind of switches for its overlay and settings, for the same
-/// reason: a screen nobody has looked at is a screen that is wrong.
+/// recordings with synthesized audio in a temporary folder, a fake
+/// microphone, the stub engine, nothing else on disk — and `CLIO_SHOW` is
+/// one of `record`, `settings`, `detail`. `CLIO_AUTOPLAY=1` starts playback
+/// when the detail view appears, so the seek highlight can be seen without
+/// a tap. The Mac app has the same kind of switches for its overlay and
+/// settings, for the same reason: a screen nobody has looked at is a
+/// screen that is wrong.
 public enum LaunchOptions {
     @MainActor
     public static func model() -> AppModel {
         ProcessInfo.processInfo.environment["CLIO_SIMULATE"] == "1"
-            ? AppModel.simulating()
+            ? AppModel.simulating(audio: true)
             : AppModel.live()
+    }
+
+    public static var autoplay: Bool {
+        ProcessInfo.processInfo.environment["CLIO_AUTOPLAY"] == "1"
     }
 
     @MainActor

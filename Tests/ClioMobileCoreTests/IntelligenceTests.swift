@@ -61,6 +61,7 @@ struct RecordingTitleTests {
             """
         let decoded = try JSONDecoder().decode(Recording.self, from: Data(old.utf8))
         #expect(decoded.generatedTitle == nil)
+        #expect(decoded.segments.isEmpty, "a recording from before segments still decodes")
         #expect(decoded.displayTitle == "hello there")
     }
 }

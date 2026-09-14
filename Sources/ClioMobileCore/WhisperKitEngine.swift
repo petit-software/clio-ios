@@ -104,11 +104,22 @@ public actor WhisperKitEngine: TranscriptionEngine {
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Segment text carries the timestamp and task tokens the whole-text
+        // path strips; they are stripped here the same way.
+        let segments = results.flatMap(\.segments).compactMap { segment -> TranscriptSegment? in
+            let clean = TranscriptFormatter.strippingSpecialTokens(segment.text)
+            guard !clean.isEmpty, segment.end > segment.start else { return nil }
+            return TranscriptSegment(start: TimeInterval(segment.start),
+                                     end: TimeInterval(segment.end),
+                                     text: clean)
+        }
+
         // Silence is a legitimate outcome, not an error — the controller turns
         // an empty transcript into "nothing heard".
         return Transcript(
             text: text,
             language: results.first?.language ?? options.language,
-            duration: Double(samples.count) / AudioRecorder.sampleRate)
+            duration: Double(samples.count) / AudioRecorder.sampleRate,
+            segments: segments)
     }
 }

@@ -1,14 +1,43 @@
 import Foundation
 
+/// One stretch of speech with the seconds it occupies in the audio.
+///
+/// What makes the transcript navigable: tap a sentence, hear it. Times are
+/// relative to the audio the engine was given; the controller shifts them
+/// to the stored file when silence was trimmed off the front.
+public struct TranscriptSegment: Codable, Sendable, Equatable, Hashable {
+    public var start: TimeInterval
+    public var end: TimeInterval
+    public var text: String
+
+    public init(start: TimeInterval, end: TimeInterval, text: String) {
+        self.start = start
+        self.end = end
+        self.text = text
+    }
+
+    public func contains(_ time: TimeInterval) -> Bool {
+        time >= start && time < end
+    }
+
+    public func offset(by seconds: TimeInterval) -> TranscriptSegment {
+        TranscriptSegment(start: start + seconds, end: end + seconds, text: text)
+    }
+}
+
 public struct Transcript: Sendable, Equatable {
     public var text: String
     public var language: String?
     public var duration: TimeInterval
+    /// Empty when the engine has no timings; the text is still the transcript.
+    public var segments: [TranscriptSegment]
 
-    public init(text: String, language: String? = nil, duration: TimeInterval = 0) {
+    public init(text: String, language: String? = nil, duration: TimeInterval = 0,
+                segments: [TranscriptSegment] = []) {
         self.text = text
         self.language = language
         self.duration = duration
+        self.segments = segments
     }
 }
 
@@ -84,10 +113,15 @@ public actor StubTranscriptionEngine: TranscriptionEngine {
                            options: TranscribeOptions) async throws -> Transcript {
         try await Task.sleep(for: latency)
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
-        let text = String(
-            format: "[Clio stub] captured %.1fs of audio (%d samples). "
-                  + "Real transcription needs a downloaded model.",
-            seconds, samples.count)
-        return Transcript(text: text, language: options.language, duration: seconds)
+        let first = String(format: "[Clio stub] captured %.1fs of audio (%d samples).",
+                           seconds, samples.count)
+        let second = "Real transcription needs a downloaded model."
+        // Two segments over the clip, so tap-to-seek has something to seek.
+        let segments = [
+            TranscriptSegment(start: 0, end: seconds / 2, text: first),
+            TranscriptSegment(start: seconds / 2, end: seconds, text: second),
+        ]
+        return Transcript(text: first + " " + second, language: options.language,
+                          duration: seconds, segments: segments)
     }
 }

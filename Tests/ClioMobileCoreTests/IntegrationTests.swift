@@ -95,6 +95,16 @@ struct IntegrationTests {
         #expect(text.contains("quick brown fox"))
         #expect(text.contains("lazy dog"))
 
+        // Timings: at least one segment, inside the clip, clean of tokens.
+        for segment in transcript.segments {
+            print("[integration] segment \(segment.start)–\(segment.end): \(segment.text)")
+        }
+        #expect(!transcript.segments.isEmpty)
+        #expect(transcript.segments.allSatisfy { $0.start >= 0 && $0.end <= transcript.duration + 1 })
+        #expect(transcript.segments.allSatisfy { !$0.text.contains("<|") })
+        #expect(transcript.segments.map(\.text).joined(separator: " ").lowercased()
+            .contains("quick brown fox"))
+
         await engine.unload()
         #expect(await engine.isLoaded == false)
     }
