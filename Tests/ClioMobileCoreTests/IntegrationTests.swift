@@ -162,5 +162,31 @@ struct IntegrationTests {
         #expect(summary.summary.lowercased().contains("plumber")
                 || summary.summary.lowercased().contains("boiler"))
     }
+
+    /// The recordings are as likely to be Dutch as English. Either the
+    /// model handles it, or the failure names the language — both are
+    /// fine; a generic error is not.
+    @Test("Dutch is either summarized or refused by name")
+    func dutch() async throws {
+        let engine = SummaryEngines.live()
+        guard await engine.availability.isAvailable else { return }
+
+        let transcript = """
+            Even een notitie voor morgen. De loodgieter kan donderdagochtend komen, \
+            maar alleen voor tienen, dus er moet iemand thuis zijn. De offerte voor \
+            de ketel was elfhonderd euro, meer dan afgesproken, dus ik wil eerst een \
+            tweede offerte. En de balkondeur klemt nog steeds als het warm is.
+            """
+        do {
+            let summary = try await engine.summarize(transcript, language: "nl")
+            print("[integration] nl title: \(summary.title)")
+            print("[integration] nl summary: \(summary.summary)")
+            #expect(!summary.title.isEmpty)
+            #expect(!summary.summary.isEmpty)
+        } catch let error as SummaryEngineError {
+            print("[integration] nl refused: \(error.localizedDescription)")
+            #expect(error == .unsupportedLanguage("Dutch"))
+        }
+    }
 }
 #endif

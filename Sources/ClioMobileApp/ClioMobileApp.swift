@@ -1,8 +1,33 @@
+import ClioMobileCore
 import ClioMobileUI
 import SwiftUI
 
+#if os(iOS)
+import UIKit
+
+/// One reason to exist: iOS relaunches the app when a background model
+/// download finishes while it was not running, and delivers that here.
+/// Touching the shared downloader reconnects its session, its delegate
+/// moves the file into place, and the completion is called when done.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard identifier == BackgroundDownloader.sessionIdentifier else {
+            completionHandler()
+            return
+        }
+        let handler: @Sendable () -> Void = { MainActor.assumeIsolated(completionHandler) }
+        BackgroundDownloader.shared.backgroundEventsCompletion = handler
+    }
+}
+#endif
+
 @main
 struct ClioMobileApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var model: AppModel
     private let initialScreen: InitialScreen
     @Environment(\.scenePhase) private var scenePhase

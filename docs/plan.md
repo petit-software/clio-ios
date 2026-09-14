@@ -177,8 +177,13 @@ the phone.
   sampled from its own background column. Light and dark variants.
 - Storage: recordings, models and the total in About; delete-all with
   confirmation
+- Model downloads on a background `URLSession`, so locking the screen
+  during a gigabyte download does not end it; the delegate verifies and
+  places each file itself, so a relaunched app finds it where the next
+  attempt looks
 - Privacy manifest, automatic signing with the team; no entitlements
-  needed — no iCloud, no push, no app groups
+  needed — no iCloud, no push, no app groups. `xcodebuild archive` with
+  automatic provisioning succeeds for the app and the widget.
 - The record button is a full-width red capsule in a bottom safe-area bar
   and says "Record". It is not a toolbar item: iOS 26 restyles those and
   collapses a labelled one to its glyph, and a lone microphone is a guess.
@@ -256,9 +261,10 @@ Not verified, and worth knowing:
   when this Mac has Apple Intelligence on, and in the app only through the
   stub. The simulator runs the real model only if the host Mac has Apple
   Intelligence; a phone needs iOS 26 and an A17 Pro or later.
-- **Languages.** The model supports a fixed set of locales. Whisper's
-  language is checked against `supportsLocale` first and the failure says
-  which language, but Dutch has not been tried.
+- **Languages beyond English and Dutch.** The model supports a fixed set
+  of locales. Whisper's language is checked against `supportsLocale` first
+  and the failure names the language. Dutch is supported on this Mac's
+  model and the summary came back in Dutch (`IntegrationTests/dutch`).
 - **WhisperKit on a phone.** The engine is the Mac app's and the integration
   test runs it on the host's Neural Engine. Nobody has downloaded a model
   and transcribed on an iPhone or a simulator yet. The simulator has no
@@ -270,10 +276,13 @@ Not verified, and worth knowing:
   device is the test.
 - **playback of a real file.** The player has only been drawn against a
   missing file.
-- **background downloads.** A download runs in a `Task` on `URLSession.shared`
-  and dies with the app if iOS suspends it. Whisper Small is 217 MB and
-  arrives in a minute on Wi-Fi; the two large models may need a background
-  `URLSession` (M4) if suspension turns out to bite.
+- **background downloads across a relaunch.** Downloads go through a
+  background `URLSession` (`BackgroundDownloader`), so a locked screen
+  does not end them; each task carries its destination and checksum so
+  the delegate can verify and place the file even if the app was killed
+  meanwhile, and the app delegate reconnects the session on relaunch.
+  The foreground path is exercised by the integration test; the relaunch
+  path is written, not exercised.
 - **background recording** with the screen locked.
 
 ## Decisions already made

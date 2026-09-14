@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// One file inside a model folder on the remote.
@@ -46,6 +45,7 @@ public enum ModelTransportError: LocalizedError {
 }
 
 public struct HuggingFaceTransport: ModelTransport {
+    /// For listings. Downloads go through the background session.
     private let session: URLSession
 
     public init(session: URLSession = .shared) {
@@ -74,68 +74,17 @@ public struct HuggingFaceTransport: ModelTransport {
         return files
     }
 
+    /// Through the background session, so the transfer outlives the app's
+    /// foreground time; see `BackgroundDownloader`. Verification and the
+    /// move into place happen there, as the file lands.
     public func download(repo: String,
                          file: RemoteFile,
                          to destination: URL,
                          onProgress: @Sendable @escaping (Int64) -> Void) async throws {
         let url = URL(string:
             "https://huggingface.co/\(repo)/resolve/main/\(file.path)")!
-
-        let (bytes, response) = try await session.bytes(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw ModelTransportError.badResponse(
-                (response as? HTTPURLResponse)?.statusCode ?? -1)
-        }
-
-        try FileManager.default.createDirectory(
-            at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true)
-
-        // Written to a sibling temp file and moved into place, so a cancelled
-        // or failed download never leaves a half-file that later looks
-        // installed.
-        let temp = destination.appendingPathExtension("partial")
-        try? FileManager.default.removeItem(at: temp)
-        FileManager.default.createFile(atPath: temp.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: temp)
-        defer { try? handle.close() }
-
-        var hasher = SHA256()
-        var chunk = Data()
-        chunk.reserveCapacity(1 << 16)
-        var written: Int64 = 0
-
-        for try await byte in bytes {
-            chunk.append(byte)
-            if chunk.count >= (1 << 16) {
-                try handle.write(contentsOf: chunk)
-                hasher.update(data: chunk)
-                written += Int64(chunk.count)
-                onProgress(written)
-                chunk.removeAll(keepingCapacity: true)
-                try Task.checkCancellation()
-            }
-        }
-        if !chunk.isEmpty {
-            try handle.write(contentsOf: chunk)
-            hasher.update(data: chunk)
-            written += Int64(chunk.count)
-            onProgress(written)
-        }
-        try handle.close()
-
-        if let expected = file.sha256 {
-            let actual = hasher.finalize()
-                .map { String(format: "%02x", $0) }.joined()
-            guard actual == expected else {
-                try? FileManager.default.removeItem(at: temp)
-                throw ModelTransportError.checksumMismatch(
-                    (file.path as NSString).lastPathComponent)
-            }
-        }
-
-        try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.moveItem(at: temp, to: destination)
+        try await BackgroundDownloader.shared.download(
+            url, to: destination, size: file.size, sha256: file.sha256, onProgress: onProgress)
     }
 
     // MARK: Wire format
