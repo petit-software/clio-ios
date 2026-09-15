@@ -250,8 +250,14 @@ Two home layouts are kept side by side, `HomeStyle.pane` and
 one is the default for now: the list runs the full height, a capsule
 floats at the bottom, and under it a wash rises from solid colour at the
 screen edge to nothing a little above the button, with the list scrolling
-through it. Under the colour is a blur that comes on with it: a material
-masked by the same gradient, since there is no public variable blur. The pane is the earlier design, the list ending above a
+through it. Under the colour is a variable blur that comes on with it,
+nothing at the top of the wash and the full radius by the button, and a
+stronger one while a held recording runs. It is BlurUIKit's
+(`TimOliver/BlurUIKit`, a package dependency, iOS only): UIKit's private
+variable-blur filter reached through a public property rather than the
+runtime, which the author calls a grey area and App Review has so far
+let through. The host build, which has no UIKit, gets a material masked
+by the same gradient instead. The pane is the earlier design, the list ending above a
 strip that is the button.
 
 The colour is the icon's, not red: `Accent.lime` is the green the icon's

@@ -48,7 +48,7 @@ public struct RootView: View {
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id)
-                        .navigationTransition(.zoom(sourceID: id, in: zoom))
+                        .zoomTransition(from: id, in: zoom)
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
@@ -155,3 +155,16 @@ public enum LaunchOptions {
     }
 }
 #endif
+
+private extension View {
+    /// iOS 18's zoom out of the row; the host build, where the transition
+    /// does not exist, gets the plain push.
+    @ViewBuilder
+    func zoomTransition(from id: Recording.ID, in namespace: Namespace.ID) -> some View {
+        #if os(iOS)
+        navigationTransition(.zoom(sourceID: id, in: namespace))
+        #else
+        self
+        #endif
+    }
+}

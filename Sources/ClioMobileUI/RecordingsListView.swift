@@ -1,5 +1,9 @@
 import ClioMobileCore
 import SwiftUI
+#if canImport(BlurSwiftUI)
+import BlurSwiftUI
+import BlurUIKit
+#endif
 
 /// Two ways to put the record button under the list. Both kept, so the
 /// one that is not the default can be looked at: `CLIO_HOME=pane` or
@@ -309,22 +313,11 @@ struct FloatingRecordPane: View {
                        + Self.buttonBottomPadding + bottomInset
                        + lift + swell * Self.washSwell
             ZStack(alignment: .bottom) {
-                // Under the colour, a blur that comes on with it: a material
-                // masked by the same gradient, so the rows soften as they
-                // scroll into the wash and are gone by the button. Not a
-                // variable blur — there is no public one — but it reads as
-                // one, because the material's tint and blur fade together.
-                Rectangle()
-                    .fill(.regularMaterial)
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .black.opacity(0.6), location: 0.45),
-                                .init(color: .black, location: 0.7),
-                            ],
-                            startPoint: .top, endPoint: .bottom)
-                    }
+                // Under the colour, a blur that comes on with it: nothing at
+                // the top of the wash, the full radius by the button, so the
+                // rows soften as they scroll in and are gone by the button.
+                // Stronger while a held recording runs.
+                WashBlur(radius: held ? 16 : 6)
                     .frame(height: height)
                     .animation(.smooth(duration: 0.12), value: swell)
                     .animation(.smooth(duration: 0.3), value: held)
@@ -353,6 +346,37 @@ struct FloatingRecordPane: View {
         safeArea.bottom
         #else
         0
+        #endif
+    }
+}
+
+/// The blur under the wash, transparent at the top and full at the bottom.
+/// On iOS it is BlurUIKit's variable blur, a true gradient of radius; the
+/// host build, which has no UIKit, gets a material masked by a gradient,
+/// whose tint and blur fade together and read much the same.
+struct WashBlur: View {
+    var radius: CGFloat
+
+    var body: some View {
+        #if canImport(BlurSwiftUI)
+        VariableBlur(direction: .up)
+            .maximumBlurRadius(radius)
+            // The wash colours the rows already; no grey on top of it.
+            .dimmingAlpha(nil)
+            // Full radius over the bottom third, where the button sits.
+            .blurStartingInset(.relative(fraction: 0.3))
+        #else
+        Rectangle()
+            .fill(.regularMaterial)
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black.opacity(0.6), location: 0.45),
+                        .init(color: .black, location: 0.7),
+                    ],
+                    startPoint: .top, endPoint: .bottom)
+            }
         #endif
     }
 }
