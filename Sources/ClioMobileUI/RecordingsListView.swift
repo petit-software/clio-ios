@@ -289,28 +289,36 @@ struct FloatingRecordPane: View {
     static let buttonHeight: CGFloat = 56
     static let buttonBottomPadding: CGFloat = 12
 
-    /// How much taller the wash gets at full voice, in hold-to-record.
-    static let washSwell: CGFloat = 220
+    /// How much taller the wash is while a held recording runs, before the
+    /// voice adds to it: the recording has to be visible from across the
+    /// room, not only heard in the meter.
+    static let washWhileHeld: CGFloat = 200
+    /// How much taller again at full voice, in hold-to-record.
+    static let washSwell: CGFloat = 200
 
     var body: some View {
         if !isSearching {
             let capture = model.capture
-            let listening = model.settings.settings.holdToRecord && capture.state == .recording
-            // While a held recording runs, the wash is the meter: it swells
-            // up the screen with the voice and settles between words.
-            let swell = listening ? CGFloat(capture.level) : 0
+            let held = model.settings.settings.holdToRecord && capture.state.isCapturing
+            // While a held recording runs the wash steps up and brightens,
+            // and on top of that it is the meter: it swells up the screen
+            // with the voice and settles between words.
+            let swell = held ? CGFloat(capture.level) : 0
+            let lift = held ? Self.washWhileHeld : 0
             ZStack(alignment: .bottom) {
                 LinearGradient(
                     stops: [
                         .init(color: Accent.lime.opacity(0), location: 0),
-                        .init(color: Accent.lime.opacity(0.35 + 0.2 * swell), location: 0.45),
-                        .init(color: Accent.lime.opacity(0.95), location: 1),
+                        .init(color: Accent.lime.opacity((held ? 0.6 : 0.35) + 0.2 * swell),
+                              location: 0.45),
+                        .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
                     ],
                     startPoint: .top, endPoint: .bottom)
                     .frame(height: Self.washAboveButton + Self.buttonHeight
                                  + Self.buttonBottomPadding + bottomInset
-                                 + swell * Self.washSwell)
+                                 + lift + swell * Self.washSwell)
                     .animation(.smooth(duration: 0.12), value: swell)
+                    .animation(.smooth(duration: 0.3), value: held)
                     .allowsHitTesting(false)
                 FloatingRecordButton(onRecord: onRecord)
                     .padding(.horizontal, 20)
@@ -388,12 +396,15 @@ struct FloatingRecordButton: View {
     }
 
     /// No clock while holding: the finger is on the button and the wash
-    /// shows the voice. Only what happens after letting go is worth a word.
+    /// shows the voice. The word says what the button does, then what it
+    /// is doing.
     private func title(_ capture: CaptureController) -> String {
         guard model.settings.settings.holdToRecord else { return "Record" }
         switch capture.state {
+        case .starting: return "Starting…"
+        case .recording, .interrupted, .paused: return "Recording"
         case .transcribing: return "Transcribing…"
-        default: return "Record"
+        case .idle, .failed: return "Press and hold to record"
         }
     }
 
