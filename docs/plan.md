@@ -188,7 +188,8 @@ the phone.
   edge to edge and down through the home indicator, "Record" in white on
   it, split-view style — the list ends where the red begins rather than
   scrolling under a button. Not a toolbar item: iOS 26 restyles those and
-  collapses a labelled one to its glyph. Search is pinned under the title.
+  collapses a labelled one to its glyph. Search is under the title, shown
+  when the list is pulled down.
 - Decision on the shared core: still copied, see "Decisions"
 
 Ships: a TestFlight build, once it has been run on a phone.

@@ -51,7 +51,8 @@ struct RecordingsListView: View {
         }
         .navigationTitle("Recordings")
         // Under the title, not in the bottom bar where iOS 26 would put it:
-        // the bottom belongs to the record button alone.
+        // the bottom belongs to the record button alone. Out of the way
+        // until the list is pulled down.
         .searchable(text: $query, placement: .searchPlacement, prompt: "Search transcripts")
     }
 
@@ -565,7 +566,7 @@ extension EnvironmentValues {
 private extension SearchFieldPlacement {
     static var searchPlacement: SearchFieldPlacement {
         #if os(iOS)
-        .navigationBarDrawer(displayMode: .always)
+        .navigationBarDrawer(displayMode: .automatic)
         #else
         .automatic
         #endif

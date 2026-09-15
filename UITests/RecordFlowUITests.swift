@@ -7,7 +7,7 @@ import XCTest
 ///
 ///     xcrun simctl privacy booted grant microphone com.bartbak.clio.ios
 ///     xcodebuild test -project Clio.xcodeproj -scheme Clio \
-///       -only-testing:ClioUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+///       -only-testing:ClioUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ///
 /// Without a model installed the recording is saved as failed with the
 /// "no model" message, which is the expected outcome on a fresh
