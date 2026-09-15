@@ -212,6 +212,7 @@ struct RecordingsListView: View {
                 }
             }
         }
+        .softTopEdge()
     }
 
     /// Recording works without a model — the audio is kept and can be
@@ -325,6 +326,18 @@ private extension View {
         #else
         self
         #endif
+    }
+
+    /// The bar over a scrolled list stays translucent and fades into the
+    /// rows, with no hairline where the two meet. Before iOS 26 the bar's
+    /// own blur applies, which draws its usual line.
+    @ViewBuilder
+    func softTopEdge() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
     }
 
     /// Liquid Glass on iOS 26, a thin material before it.
