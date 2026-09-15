@@ -310,7 +310,7 @@ struct FloatingRecordPane: View {
                 // Masked by the wash's shape, solid, not by its colour: masked
                 // by the colour it lived only in the thin band where the
                 // colour was neither gone nor opaque.
-                WashBlur(radius: held ? 16 : 6)
+                WashBlur(radius: held ? 8 : 3)
                     .frame(height: height)
                     .mask {
                         VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell,
