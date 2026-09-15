@@ -23,7 +23,7 @@ Four screens, all native SwiftUI, no third-party UI:
 | **Recordings** | The list. Newest first, title, date, duration, first line of the transcript. Search. Swipe to delete. A record button that is never more than one tap away. |
 | **Record** | Elapsed time, live level meter, the cap. Stop or cancel. Transcribes on stop and returns to the list with the new recording at the top. |
 | **Recording** | Playback with a scrubber, the transcript (selectable), an editable title, share, copy, delete. Later: an on-device summary. |
-| **Settings** | Model (download, select, delete), transcription (language, translate, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD), intelligence, about. |
+| **Settings** | Model (download, select, delete), transcription (language, translate, auto copy, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD), intelligence, about. |
 
 "Local LLM" means two on-device models, both native:
 

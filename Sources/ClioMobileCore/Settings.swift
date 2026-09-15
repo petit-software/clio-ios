@@ -28,6 +28,8 @@ public struct Settings: Codable, Equatable, Sendable {
     /// `nil` means auto-detect.
     public var language: String? = nil
     public var translateToEnglish: Bool = false
+    /// A finished transcript goes to the clipboard on its own.
+    public var autoCopyTranscript: Bool = false
     public var customVocabulary: [String] = []
     public var wordReplacements: [WordReplacement] = []
 
@@ -75,6 +77,7 @@ public struct Settings: Codable, Equatable, Sendable {
 
         language = readOptional(.language, String.self)
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)
+        autoCopyTranscript = read(.autoCopyTranscript, defaults.autoCopyTranscript)
         customVocabulary = read(.customVocabulary, defaults.customVocabulary)
         wordReplacements = read(.wordReplacements, defaults.wordReplacements)
 

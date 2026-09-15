@@ -82,6 +82,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .inlineTitle()
+            .softScrollEdges()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -134,6 +135,12 @@ struct SettingsView: View {
             Toggle("Translate to English", isOn: Binding(
                 get: { store.settings.translateToEnglish },
                 set: { store.settings.translateToEnglish = $0 }))
+            Toggle(isOn: Binding(
+                get: { store.settings.autoCopyTranscript },
+                set: { store.settings.autoCopyTranscript = $0 })) {
+                Text("Auto Copy to Clipboard")
+                Text("Every finished transcript is copied, ready to paste.")
+            }
             NavigationLink {
                 VocabularyEditor()
             } label: {
@@ -380,6 +387,19 @@ struct ReplacementsEditor: View {
                                  WordReplacement(find: "gonna", replace: "going to")]
     return NavigationStack { ReplacementsEditor() }
         .environment(AppModel.simulating(settings: settings))
+}
+
+extension View {
+    /// The bars fade the content under them instead of cutting it: iOS
+    /// 26's soft scroll-edge effect, on every edge.
+    @ViewBuilder
+    func softScrollEdges() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            scrollEdgeEffectStyle(.soft, for: .all)
+        } else {
+            self
+        }
+    }
 }
 
 private extension View {

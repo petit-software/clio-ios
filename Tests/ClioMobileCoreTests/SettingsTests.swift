@@ -13,6 +13,17 @@ struct SettingsAdditionsTests {
         let old = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
         #expect(old.holdToRecord == false)
     }
+
+    @Test("Auto copy defaults off and survives a round trip")
+    func autoCopy() throws {
+        #expect(Settings().autoCopyTranscript == false)
+        var settings = Settings()
+        settings.autoCopyTranscript = true
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).autoCopyTranscript)
+        let old = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
+        #expect(old.autoCopyTranscript == false)
+    }
 }
 @testable import ClioMobileCore
 

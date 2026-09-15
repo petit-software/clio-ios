@@ -7,6 +7,8 @@ struct RecordingDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let id: Recording.ID
+    /// The transcript was copied on the way in (auto copy): say so.
+    var copiedOnArrival = false
 
     @State private var player = AudioPlayerController()
     @State private var title = ""
@@ -33,22 +35,29 @@ struct RecordingDetailView: View {
                 }
             }
 
+            // A plain table, the way Photos lays out a picture's metadata:
+            // the labels in one column, the values in the other, one card.
             Section("Details") {
-                LabeledContent("Recorded",
-                               value: recording.createdAt.formatted(date: .long, time: .shortened))
-                LabeledContent("Length", value: Format.duration(recording.duration))
-                LabeledContent("Language", value: TranscriptionLanguage.name(for: recording.language))
-                if let modelID = recording.modelID {
-                    LabeledContent("Model", value: model.models.displayName(for: modelID))
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+                    detail("Recorded",
+                           recording.createdAt.formatted(date: .long, time: .shortened))
+                    detail("Length", Format.duration(recording.duration))
+                    detail("Language", TranscriptionLanguage.name(for: recording.language))
+                    if let modelID = recording.modelID {
+                        detail("Model", model.models.displayName(for: modelID))
+                    }
+                    let bytes = fileSize(recording)
+                    if bytes > 0 {
+                        detail("Audio", Format.bytes(bytes))
+                    }
                 }
-                let bytes = fileSize(recording)
-                if bytes > 0 {
-                    LabeledContent("Audio", value: Format.bytes(bytes))
-                }
+                .font(.subheadline)
+                .padding(.vertical, 2)
             }
         }
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
+        .softScrollEdges()
         .playerBar { PlayerBar(player: player) }
         .closeInsteadOfBack { dismiss() }
         .toolbar {
@@ -112,6 +121,7 @@ struct RecordingDetailView: View {
             guard newValue != recording.displayTitle || !recording.title.isEmpty else { return }
             model.library.rename(id, to: newValue)
         }
+        .onAppear { if copiedOnArrival { showCopied() } }
         .onChange(of: recording.displayTitle) { _, newValue in
             // The language model named it while this screen was open. Only
             // shown if the user has not typed a name of their own.
@@ -219,13 +229,24 @@ struct RecordingDetailView: View {
         return Int64(size ?? 0)
     }
 
+    private func detail(_ label: LocalizedStringKey, _ value: String) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
+            Text(label)
+                .foregroundStyle(.secondary)
+                .gridColumnAlignment(.leading)
+            Text(value)
+                .gridColumnAlignment(.leading)
+        }
+    }
+
     private func copy(_ text: String) {
-        #if canImport(UIKit)
-        UIPasteboard.general.string = text
-        #elseif canImport(AppKit)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        #endif
+        Clipboard.copy(text)
+        showCopied()
+    }
+
+    /// The toast, for a copy made here or one made for the user on the
+    /// way in.
+    private func showCopied() {
         withAnimation { copied = true }
         Task {
             try? await Task.sleep(for: .seconds(1.5))
@@ -543,4 +564,16 @@ struct PlayerCard: View {
         RecordingDetailView(id: model.library.recordings[3].id)
     }
     .environment(model)
+}
+
+/// The system clipboard, one call for either platform.
+enum Clipboard {
+    static func copy(_ text: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
+    }
 }

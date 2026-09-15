@@ -20,6 +20,8 @@ public struct RootView: View {
     @State private var activity = RecordingActivityController()
     /// Shared by a row and its detail, so the detail zooms out of the row.
     @Namespace private var zoom
+    /// The recording whose transcript went to the clipboard on landing.
+    @State private var autoCopied: Recording.ID?
     private let initialScreen: InitialScreen
     private let homeStyle: HomeStyle
 
@@ -47,7 +49,7 @@ public struct RootView: View {
                                onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
-                    RecordingDetailView(id: id)
+                    RecordingDetailView(id: id, copiedOnArrival: autoCopied == id)
                         .zoomTransition(from: id, in: zoom)
                 }
                 .toolbar {
@@ -76,6 +78,15 @@ public struct RootView: View {
             // A recording landed — from the sheet or from holding the
             // button. Either way, it opens.
             guard let id else { return }
+            // With auto copy on, the transcript is on the clipboard before
+            // the recording is on screen, and the detail says so.
+            if model.settings.settings.autoCopyTranscript,
+               let transcript = model.library[id]?.transcript, !transcript.isEmpty {
+                Clipboard.copy(transcript)
+                autoCopied = id
+            } else {
+                autoCopied = nil
+            }
             showingRecorder = false
             showingSettings = false
             path = [id]
