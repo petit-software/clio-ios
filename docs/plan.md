@@ -353,6 +353,21 @@ languages, titles typed and generated, summaries, locations, lengths from
 seconds to minutes, spread over a month. Each gets a synthesized tone as
 audio so it plays. About ▸ Delete All Recordings clears them.
 
+## TestFlight
+
+The version lives in one place, `project.yml` (`MARKETING_VERSION`,
+`CURRENT_PROJECT_VERSION`); both Info.plists read it, and App Store
+Connect wants the app and the widget to agree. Bump the build number
+for every upload. `scripts/testflight.sh` archives in Release with
+automatic signing, exports an `.ipa` for App Store Connect, and uploads
+it when an App Store Connect API key is in the environment
+(`ASC_KEY_ID`, `ASC_ISSUER_ID`, and the `.p8` at
+`~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`); without one it
+stops at the `.ipa`, which Transporter or the Xcode Organizer can
+upload. The app record for `com.bartbak.clio.ios` has to exist in App
+Store Connect first. Debug-only surfaces — Settings ▸ Developer, the
+`CLIO_*` launch switches — are compiled out of Release.
+
 `xcodebuild test` needs the destination pinned to the simulator's OS or
 id (`OS=26.5`, or `id=<udid>` from `simctl list`): with the name alone it
 asks for the latest runtime, and the iPhone 17 Pro is not in it.

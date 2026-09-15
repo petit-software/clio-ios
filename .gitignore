@@ -1,4 +1,6 @@
 .build/
+*.xcarchive
+*.ipa
 .swiftpm/
 *.xcodeproj
 .DS_Store
@@ -7,3 +9,5 @@ DerivedData/
 
 # Xcode-in-place builds
 build/
+*.xcarchive
+*.ipa

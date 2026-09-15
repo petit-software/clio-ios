@@ -18,6 +18,10 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
+    # The one place the version lives; both Info.plists read these. Bump
+    # CURRENT_PROJECT_VERSION for every TestFlight upload.
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: 1
 
 packages:
   ClioMobile:
