@@ -245,6 +245,12 @@ Five things from the todo, all on the way the app is used:
 
 A recording that lands opens from the root, whichever way it was made.
 
+Stopping a recording, from the sheet or by letting go of the hold
+button, shows one pill over the list — a spinner and "Transcribing" —
+until the recording opens; the sheet goes the moment Stop is tapped
+rather than staying to say the same thing. A recording opens with the
+stack's plain push; a zoom out of the row was tried and taken out.
+
 Two home layouts are kept side by side, `HomeStyle.pane` and
 `HomeStyle.floating`, switchable at launch with `CLIO_HOME`. The floating
 one is the default for now: the list runs the full height, a capsule
@@ -310,7 +316,9 @@ engine; the only thing it writes is a synthesized tone per recording in a
 temporary folder, so playback and tap-to-seek work. `CLIO_SHOW` is
 `record`, `hold` (hold-to-record mid-hold, the wash swelling), `settings`
 or `detail`; `CLIO_AUTOPLAY=1` starts playback when the detail view
-appears; `CLIO_HOME` is `pane` or `floating`. Debug builds only.
+appears; `CLIO_HOME` is `pane` or `floating`; `CLIO_STUB_LATENCY=6` makes
+the stub engine take six seconds, long enough to look at the transcribing
+pill. Debug builds only.
 
 `xcodebuild test` needs the destination pinned to the simulator's OS or
 id (`OS=26.5`, or `id=<udid>` from `simctl list`): with the name alone it

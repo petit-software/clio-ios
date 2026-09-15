@@ -314,9 +314,13 @@ struct RecordView: View {
         }
     }
 
+    /// Stop, and go: the transcript is written behind the list, where the
+    /// root shows a pill for the wait, and the recording opens when it is
+    /// there. The sheet has nothing to add to that.
     private func stop() async {
         haptic(Haptics.recordStopped)
-        await model.capture.stop()
+        Task { await model.capture.stop() }
+        onClose()
     }
 
     private func close(cancelling: Bool) async {

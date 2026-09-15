@@ -18,8 +18,6 @@ public struct RootView: View {
     @State private var showingRecorder = false
     @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
-    /// Shared by a row and its detail, so the detail zooms out of the row.
-    @Namespace private var zoom
     /// The recording whose transcript went to the clipboard on landing.
     @State private var autoCopied: Recording.ID?
     private let initialScreen: InitialScreen
@@ -38,19 +36,29 @@ public struct RootView: View {
 
     public var body: some View {
         GeometryReader { proxy in
-            stack.environment(\.safeAreaInsets, proxy.safeAreaInsets)
+            stack
+                .environment(\.safeAreaInsets, proxy.safeAreaInsets)
+                // Between Stop and the recording opening: the sheet is gone,
+                // the hold button has been let go of, and this says what
+                // the wait is. The same pill either way.
+                .overlay(alignment: .top) {
+                    if model.capture.state == .transcribing {
+                        Toast("Transcribing") { ProgressView() }
+                            .padding(.top, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.smooth(duration: 0.3), value: model.capture.state == .transcribing)
         }
     }
 
     private var stack: some View {
         NavigationStack(path: $path) {
             RecordingsListView(style: homeStyle,
-                               zoom: zoom,
                                onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id, copiedOnArrival: autoCopied == id)
-                        .zoomTransition(from: id, in: zoom)
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
@@ -133,9 +141,15 @@ public struct RootView: View {
 public enum LaunchOptions {
     @MainActor
     public static func model() -> AppModel {
-        ProcessInfo.processInfo.environment["CLIO_SIMULATE"] == "1"
-            ? AppModel.simulating(audio: true)
-            : AppModel.live()
+        guard ProcessInfo.processInfo.environment["CLIO_SIMULATE"] == "1" else {
+            return AppModel.live()
+        }
+        // `CLIO_STUB_LATENCY=3` makes the stub take three seconds, long
+        // enough to look at the transcribing state.
+        let seconds = ProcessInfo.processInfo.environment["CLIO_STUB_LATENCY"]
+            .flatMap(Double.init) ?? 0.3
+        return AppModel.simulating(audio: true,
+                                   engine: StubTranscriptionEngine(latency: .seconds(seconds)))
     }
 
     public static var autoplay: Bool {
@@ -166,16 +180,3 @@ public enum LaunchOptions {
     }
 }
 #endif
-
-private extension View {
-    /// iOS 18's zoom out of the row; the host build, where the transition
-    /// does not exist, gets the plain push.
-    @ViewBuilder
-    func zoomTransition(from id: Recording.ID, in namespace: Namespace.ID) -> some View {
-        #if os(iOS)
-        navigationTransition(.zoom(sourceID: id, in: namespace))
-        #else
-        self
-        #endif
-    }
-}

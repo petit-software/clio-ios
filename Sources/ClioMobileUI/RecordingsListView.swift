@@ -39,8 +39,6 @@ struct RecordingsListView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var query = ""
     var style: HomeStyle = .default
-    /// The root's namespace for the zoom into a recording; nil in previews.
-    var zoom: Namespace.ID? = nil
     var onRecord: () -> Void
     /// Opens Settings, for the banner when nothing is installed.
     var onSettings: () -> Void = {}
@@ -165,7 +163,6 @@ struct RecordingsListView: View {
                                 NavigationLink(value: recording.id) { EmptyView() }
                                     .opacity(0)
                             }
-                            .zoomSource(recording.id, in: zoom)
                     }
                     .onDelete { offsets in
                         for index in offsets {
@@ -258,16 +255,6 @@ struct RecordingRow: View {
 }
 
 private extension View {
-    /// The row the detail zooms out of, when there is a namespace to share.
-    @ViewBuilder
-    func zoomSource(_ id: Recording.ID, in namespace: Namespace.ID?) -> some View {
-        if let namespace {
-            matchedTransitionSource(id: id, in: namespace)
-        } else {
-            self
-        }
-    }
-
     /// Liquid Glass on iOS 26, a thin material before it.
     @ViewBuilder
     func pillGlass() -> some View {
@@ -320,10 +307,14 @@ struct FloatingRecordPane: View {
                 // the top of the wash, the full radius by the button, so the
                 // rows soften as they scroll in and are gone by the button.
                 // Masked by the wash itself, so it follows the same edge.
+                // Masked by the wash's shape, solid, not by its colour: masked
+                // by the colour it lived only in the thin band where the
+                // colour was neither gone nor opaque.
                 WashBlur(radius: held ? 16 : 6)
                     .frame(height: height)
                     .mask {
-                        VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell, held: held)
+                        VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell,
+                                  held: held, solid: true)
                             .animation(.smooth(duration: 0.1), value: bands)
                     }
                     .allowsHitTesting(false)
@@ -387,6 +378,9 @@ struct VoiceWash: View, @preconcurrency Animatable {
     var base: CGFloat
     var swell: CGFloat
     var held: Bool
+    /// Black, opaque below a short feather at the edge: the same shape as
+    /// a mask for what sits under the colour.
+    var solid = false
     @Environment(\.displayScale) private var scale
 
     var animatableData: AnimatablePair<CGFloat, BarVector> {
@@ -400,7 +394,11 @@ struct VoiceWash: View, @preconcurrency Animatable {
 
     var body: some View {
         Canvas { context, size in
-            let stops: [Gradient.Stop] = [
+            let stops: [Gradient.Stop] = solid ? [
+                .init(color: .clear, location: 0),
+                .init(color: .black, location: 0.25),
+                .init(color: .black, location: 1),
+            ] : [
                 .init(color: Accent.lime.opacity(0), location: 0),
                 .init(color: Accent.lime.opacity(held ? 0.6 : 0.35), location: 0.45),
                 .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
@@ -524,6 +522,8 @@ struct FloatingRecordButton: View {
             }
         }
         .foregroundStyle(colorScheme == .dark ? Accent.lime : Accent.olive)
+        // Quiet while the transcript is written: the pill at the top says so.
+        .opacity(capture.state == .transcribing ? 0.5 : 1)
         .frame(maxWidth: .infinity)
         .frame(height: FloatingRecordPane.buttonHeight)
         .capsuleGlass(dark: colorScheme == .dark, dimmed: capture.state.isCapturing)
@@ -558,8 +558,7 @@ struct FloatingRecordButton: View {
         switch capture.state {
         case .starting: return "Starting…"
         case .recording, .interrupted, .paused: return "Recording"
-        case .transcribing: return "Transcribing…"
-        case .idle, .failed: return "Press and hold to record"
+        case .transcribing, .idle, .failed: return "Press and hold to record"
         }
     }
 
@@ -683,8 +682,7 @@ struct HoldRecordButton: View {
         switch capture.state {
         case .starting: return "Starting…"
         case .recording, .interrupted, .paused: return Format.duration(capture.elapsed)
-        case .transcribing: return "Transcribing…"
-        case .idle, .failed: return "Hold to Record"
+        case .transcribing, .idle, .failed: return "Hold to Record"
         }
     }
 

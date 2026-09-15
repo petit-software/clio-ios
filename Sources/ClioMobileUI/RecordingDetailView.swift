@@ -478,21 +478,28 @@ struct PlayerBar: View {
 /// A word and a symbol in a glass capsule, in the theme's inverse: white
 /// on a dark screen, near-black on a light one, so it reads as a note
 /// laid on top rather than another control.
-struct Toast: View {
+struct Toast<Icon: View>: View {
     let title: LocalizedStringKey
-    let systemImage: String
+    let icon: Icon
     @Environment(\.colorScheme) private var colorScheme
 
-    init(_ title: LocalizedStringKey, systemImage: String) {
+    init(_ title: LocalizedStringKey, @ViewBuilder icon: () -> Icon) {
         self.title = title
-        self.systemImage = systemImage
+        self.icon = icon()
+    }
+
+    init(_ title: LocalizedStringKey, systemImage: String) where Icon == Image {
+        self.title = title
+        self.icon = Image(systemName: systemImage)
     }
 
     var body: some View {
         let dark = colorScheme == .dark
-        Label(title, systemImage: systemImage)
+        Label { Text(title) } icon: { icon }
             .font(.callout.weight(.semibold))
             .foregroundStyle(dark ? Color.black : Color.white)
+            // A spinner as the icon takes the tint, not the foreground.
+            .tint(dark ? Color.black : Color.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .invertedGlass(dark: dark)
