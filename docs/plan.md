@@ -250,7 +250,8 @@ Two home layouts are kept side by side, `HomeStyle.pane` and
 one is the default for now: the list runs the full height, a capsule
 floats at the bottom, and under it a wash rises from solid colour at the
 screen edge to nothing a little above the button, with the list scrolling
-through it. The pane is the earlier design, the list ending above a
+through it. Under the colour is a blur that comes on with it: a material
+masked by the same gradient, since there is no public variable blur. The pane is the earlier design, the list ending above a
 strip that is the button.
 
 The colour is the icon's, not red: `Accent.lime` is the green the icon's

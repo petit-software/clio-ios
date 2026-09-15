@@ -305,7 +305,30 @@ struct FloatingRecordPane: View {
             // with the voice and settles between words.
             let swell = held ? CGFloat(capture.level) : 0
             let lift = held ? Self.washWhileHeld : 0
+            let height = Self.washAboveButton + Self.buttonHeight
+                       + Self.buttonBottomPadding + bottomInset
+                       + lift + swell * Self.washSwell
             ZStack(alignment: .bottom) {
+                // Under the colour, a blur that comes on with it: a material
+                // masked by the same gradient, so the rows soften as they
+                // scroll into the wash and are gone by the button. Not a
+                // variable blur — there is no public one — but it reads as
+                // one, because the material's tint and blur fade together.
+                Rectangle()
+                    .fill(.regularMaterial)
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black.opacity(0.6), location: 0.45),
+                                .init(color: .black, location: 0.7),
+                            ],
+                            startPoint: .top, endPoint: .bottom)
+                    }
+                    .frame(height: height)
+                    .animation(.smooth(duration: 0.12), value: swell)
+                    .animation(.smooth(duration: 0.3), value: held)
+                    .allowsHitTesting(false)
                 LinearGradient(
                     stops: [
                         .init(color: Accent.lime.opacity(0), location: 0),
@@ -314,9 +337,7 @@ struct FloatingRecordPane: View {
                         .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
                     ],
                     startPoint: .top, endPoint: .bottom)
-                    .frame(height: Self.washAboveButton + Self.buttonHeight
-                                 + Self.buttonBottomPadding + bottomInset
-                                 + lift + swell * Self.washSwell)
+                    .frame(height: height)
                     .animation(.smooth(duration: 0.12), value: swell)
                     .animation(.smooth(duration: 0.3), value: held)
                     .allowsHitTesting(false)
