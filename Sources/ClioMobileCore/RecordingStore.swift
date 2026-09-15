@@ -49,17 +49,17 @@ public final class RecordingStore {
         for recording in recordings where recording.duration > 0 {
             let url = store.audioURL(for: recording)
             guard !FileManager.default.fileExists(atPath: url.path) else { continue }
-            // A quiet tone that rises through the clip, so the ear can tell
-            // where a seek landed.
-            let count = Int(recording.duration * AudioRecorder.sampleRate)
-            let samples = (0..<count).map { i -> Float in
-                let t = Float(i) / Float(AudioRecorder.sampleRate)
-                let hz = 220 + 220 * t / Float(recording.duration)
-                return 0.08 * sin(2 * .pi * hz * t)
-            }
-            try? AudioFiles.write(samples, to: url)
+            try? AudioFiles.write(AudioFiles.tone(seconds: recording.duration), to: url)
         }
         return store
+    }
+
+    /// A recording with a synthesized tone for audio, so it plays and
+    /// seeks like a real one. For the Developer page's sample data.
+    public func addSample(_ recording: Recording) throws {
+        try AudioFiles.write(AudioFiles.tone(seconds: recording.duration),
+                             to: audioURL(for: recording))
+        add(recording)
     }
 
     public subscript(id: Recording.ID) -> Recording? {

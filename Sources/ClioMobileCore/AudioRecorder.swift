@@ -502,6 +502,17 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
 /// The recording on disk: 16-bit PCM WAV, 16 kHz mono. The exact samples
 /// the engine transcribed, in a container anything can play.
 public enum AudioFiles {
+    /// A quiet tone that rises through the clip, so the ear can tell where
+    /// a seek landed. Stand-in audio for simulated and sample recordings.
+    public static func tone(seconds: TimeInterval) -> [Float] {
+        let count = Int(max(0, seconds) * AudioRecorder.sampleRate)
+        return (0..<count).map { i -> Float in
+            let t = Float(i) / Float(AudioRecorder.sampleRate)
+            let hz = 220 + 220 * t / Float(seconds)
+            return 0.08 * sin(2 * .pi * hz * t)
+        }
+    }
+
 
     public static func write(_ samples: [Float], to url: URL) throws {
         let settings: [String: Any] = [

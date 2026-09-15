@@ -79,6 +79,15 @@ struct SettingsView: View {
                     }
                     .tint(.primary)
                 }
+                #if DEBUG
+                Section {
+                    page("Developer", value: "\(model.library.recordings.count) recordings") {
+                        DeveloperSettingsPage()
+                    }
+                } footer: {
+                    Text("Sample data for looking at the app. Debug builds only.")
+                }
+                #endif
             }
             .navigationTitle("Settings")
             .inlineTitle()

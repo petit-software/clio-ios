@@ -80,6 +80,10 @@ public final class CaptureController {
     private var pollTask: Task<Void, Never>?
     private var transcribeTask: Task<Void, Never>?
     private var locationTask: Task<RecordingLocation?, Never>?
+    /// For the capture in progress: a result with no speech in it is
+    /// thrown away rather than saved as "nothing heard". Hold to record
+    /// asks for this — a brush of the button must not leave a row behind.
+    private var discardSilence = false
 
     public init(recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
@@ -171,8 +175,9 @@ public final class CaptureController {
 
     // MARK: Record
 
-    public func start() async {
+    public func start(discardingSilence: Bool = false) async {
         guard !state.isBusy else { return }
+        discardSilence = discardingSilence
         state = .starting
         level = 0
         elapsed = 0
@@ -277,8 +282,12 @@ public final class CaptureController {
 
         guard !result.samples.isEmpty else {
             recording.status = .nothingHeard
-            library.add(recording)
-            lastRecordingID = id
+            if discardSilence {
+                discard(audioURL)
+            } else {
+                library.add(recording)
+                lastRecordingID = id
+            }
             state = .idle
             return
         }
@@ -287,6 +296,11 @@ public final class CaptureController {
             guard let self else { return }
             await self.transcribe(result.samples, into: &recording)
             guard !Task.isCancelled else { return }
+            if self.discardSilence, recording.status == .nothingHeard {
+                self.discard(audioURL)
+                self.state = .idle
+                return
+            }
             self.library.add(recording)
             self.lastRecordingID = recording.id
             self.state = .idle
@@ -295,6 +309,11 @@ public final class CaptureController {
         transcribeTask = task
         await task.value
         transcribeTask = nil
+    }
+
+    /// A capture with nothing in it, gone as if it never happened.
+    private func discard(_ audioURL: URL) {
+        try? FileManager.default.removeItem(at: audioURL)
     }
 
     /// Transcribe an existing recording again — after a failure, or with a

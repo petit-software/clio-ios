@@ -203,6 +203,33 @@ struct CaptureTests {
         #expect(controller.state == .idle, "not a failure of the controller; the recording exists")
     }
 
+    @Test("Hold to record: a capture with no speech in it leaves nothing behind")
+    @MainActor
+    func silenceIsDiscardedWhenAsked() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start(discardingSilence: true)
+        await controller.stop()
+        #expect(library.recordings.isEmpty)
+        #expect(controller.lastRecordingID == nil, "nothing opens")
+        #expect(controller.state == .idle)
+        let wavs = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasSuffix(".wav") }
+        #expect(wavs.isEmpty, "the audio file is gone too")
+
+        // And with nothing captured at all.
+        let empty = SimulatedRecorder()
+        empty.simulatedElapsed = 0
+        let (controller2, library2, directory2) = try makeController(recorder: empty)
+        defer { try? FileManager.default.removeItem(at: directory2) }
+        await controller2.start(discardingSilence: true)
+        await controller2.stop()
+        #expect(library2.recordings.isEmpty)
+    }
+
     @Test("Silence with trimming on is nothing heard, and the engine is not asked")
     @MainActor
     func silenceIsTrimmedToNothing() async throws {

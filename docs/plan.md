@@ -256,7 +256,10 @@ recording, download your local model first." and a Download button into
 Settings ▸ Model; no title, search or record button until a model is
 there or a recording exists. In hold-to-record the list fades and
 shrinks away while the finger is down and the clock takes the middle of
-the screen.
+the screen. A brush of the button leaves nothing behind: a press let go
+under half a second is cancelled, and a held capture with no speech in
+it is thrown away rather than saved as "nothing heard"
+(`start(discardingSilence:)`, proven in `CaptureTests`).
 
 Two home layouts are kept side by side, `HomeStyle.pane` and
 `HomeStyle.floating`, switchable at launch with `CLIO_HOME`. The floating
@@ -324,6 +327,13 @@ or `detail`; `CLIO_AUTOPLAY=1` starts playback when the detail view
 appears; `CLIO_HOME` is `pane` or `floating`; `CLIO_STUB_LATENCY=6` makes
 the stub engine take six seconds, long enough to look at the transcribing
 pill. Debug builds only.
+
+Settings ▸ Developer, debug builds only, fills the library on a phone or
+a simulator without recording anything: the five fixed sample recordings
+from the previews, or a couple of dozen varied ones — every status, both
+languages, titles typed and generated, summaries, locations, lengths from
+seconds to minutes, spread over a month. Each gets a synthesized tone as
+audio so it plays. About ▸ Delete All Recordings clears them.
 
 `xcodebuild test` needs the destination pinned to the simulator's OS or
 id (`OS=26.5`, or `id=<udid>` from `simctl list`): with the name alone it

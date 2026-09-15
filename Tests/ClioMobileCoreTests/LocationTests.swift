@@ -70,3 +70,22 @@ struct LocationTests {
         #expect(library.recordings.first?.location == nil)
     }
 }
+
+@Suite("Sample recordings")
+struct SampleRecordingTests {
+    @Test("A sample lands with a tone as long as it says")
+    @MainActor
+    func sampleHasAudio() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("clio-ios-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = RecordingStore(indexURL: directory.appendingPathComponent("r.json"),
+                                     audioDirectory: directory)
+        let recording = Recording(duration: 2, transcript: "Two seconds.")
+        try library.addSample(recording)
+        #expect(library.recordings.count == 1)
+        let samples = try AudioFiles.read(library.audioURL(for: recording))
+        #expect(samples.count == Int(2 * AudioRecorder.sampleRate))
+    }
+}

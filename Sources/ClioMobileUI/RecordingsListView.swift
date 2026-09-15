@@ -266,9 +266,9 @@ struct RecordingRow: View {
     let recording: Recording
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // One symbol for the row, beside the title and the snippet
-            // both: a text mark with a badge that says how the transcript
+        HStack(alignment: .center, spacing: 12) {
+            // One symbol for the row, centred beside the title and the
+            // snippet: a text mark with a badge that says how the transcript
             // went. Only the badge is coloured; the lines stay the text's.
             if let badge {
                 Image(systemName: badge.name)
@@ -276,7 +276,6 @@ struct RecordingRow: View {
                     .foregroundStyle(badge.color, .primary)
                     .font(.title3)
                     .frame(width: 24)
-                    .padding(.top, 2)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -286,7 +285,7 @@ struct RecordingRow: View {
                 Text(recording.snippet)
                     .font(.subheadline)
                     .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
-                    .lineLimit(2)
+                    .lineLimit(1)
                 if case .failed = recording.status {
                     Label("Not transcribed", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -604,7 +603,9 @@ struct FloatingRecordButton: View {
     private func press() async {
         guard !model.capture.state.isBusy else { return }
         if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
-        await model.capture.start()
+        // A held recording with no speech in it is thrown away, not saved
+        // as "nothing heard": a brush of the button leaves nothing behind.
+        await model.capture.start(discardingSilence: true)
         // Let go before the microphone was ready: nothing to keep.
         if !pressing { await release() }
     }
@@ -734,7 +735,9 @@ struct HoldRecordButton: View {
     private func press() async {
         guard model.capture.state == .idle || !model.capture.state.isBusy else { return }
         if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
-        await model.capture.start()
+        // A held recording with no speech in it is thrown away, not saved
+        // as "nothing heard": a brush of the button leaves nothing behind.
+        await model.capture.start(discardingSilence: true)
         // Let go before the microphone was ready: nothing to keep.
         if !pressing { await release() }
     }
