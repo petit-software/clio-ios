@@ -46,7 +46,7 @@ final class RecordFlowUITests: XCTestCase {
         stop.tap()
 
         // Stop → transcribing → the detail view of the new recording.
-        XCTAssertTrue(app.staticTexts["Details"].waitForExistence(timeout: 90),
+        XCTAssertTrue(app.staticTexts["Recorded"].waitForExistence(timeout: 90),
                       "the recording opened")
         XCTAssertTrue(app.staticTexts["Length"].exists)
         XCTAssertTrue(app.buttons["Play"].exists, "the audio file loaded into the player")

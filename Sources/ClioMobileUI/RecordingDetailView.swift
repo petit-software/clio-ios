@@ -30,8 +30,7 @@ struct RecordingDetailView: View {
                 transcript(recording)
             }
 
-            // The summary is the machine's note, not the recording: a plain
-            // card like the transcript's, a grey sparkle to say which is which.
+            // The summary: a plain card like the transcript's.
             if showsSummary(recording) {
                 Section("Summary") {
                     summarySection(recording)
@@ -45,8 +44,8 @@ struct RecordingDetailView: View {
             }
 
             // Bare metadata, the way Photos prints a picture's: two columns
-            // in a monospaced face, no card round them.
-            Section("Details") {
+            // in a monospaced face, no heading, no card, no separators.
+            Section {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
                     detail("Recorded",
                            recording.createdAt.formatted(date: .long, time: .shortened))
@@ -79,6 +78,8 @@ struct RecordingDetailView: View {
                 }
                 .font(.system(.subheadline, design: .monospaced))
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
             }
         }
@@ -218,15 +219,9 @@ struct RecordingDetailView: View {
             }
             .padding(.vertical, 4)
         } else if let summary = recording.summary, !summary.isEmpty {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
-                Text(summary)
-                    .textSelection(.enabled)
-            }
-            .padding(.vertical, 4)
+            Text(summary)
+                .textSelection(.enabled)
+                .padding(.vertical, 4)
         } else {
             Button("Summarize", systemImage: "text.badge.star") {
                 model.intelligence.summarize(id)

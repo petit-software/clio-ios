@@ -19,9 +19,8 @@ final class LibraryUITests: XCTestCase {
         let row = app.staticTexts["Standup notes"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
-        XCTAssertTrue(app.staticTexts["Details"].waitForExistence(timeout: 5),
+        XCTAssertTrue(app.staticTexts["Recorded"].waitForExistence(timeout: 5),
                       "the detail view opened from the row")
-        XCTAssertTrue(app.staticTexts["Recorded"].exists)
 
         app.buttons["Close"].tap()
         XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 5),
