@@ -117,14 +117,11 @@ struct RecordingDetailView: View {
             // shown if the user has not typed a name of their own.
             if recording.title.isEmpty, title != newValue { title = newValue }
         }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .top) {
             if copied {
-                Text("Copied")
-                    .font(.callout.weight(.medium))
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                Toast("Copied", systemImage: "square.filled.on.square")
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
     }
@@ -424,7 +421,45 @@ struct PlayerBar: View {
     }
 }
 
+/// A word and a symbol in a glass capsule, in the theme's inverse: white
+/// on a dark screen, near-black on a light one, so it reads as a note
+/// laid on top rather than another control.
+struct Toast: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    init(_ title: LocalizedStringKey, systemImage: String) {
+        self.title = title
+        self.systemImage = systemImage
+    }
+
+    var body: some View {
+        let dark = colorScheme == .dark
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(dark ? Color.black : Color.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .invertedGlass(dark: dark)
+            .accessibilityAddTraits(.isStaticText)
+    }
+}
+
 private extension View {
+    /// Liquid Glass on iOS 26, a plain fill before it, tinted to the
+    /// theme's inverse.
+    @ViewBuilder
+    func invertedGlass(dark: Bool) -> some View {
+        let tint = dark ? Color.white : Color.black
+        if #available(iOS 26, macOS 26, *) {
+            glassEffect(.regular.tint(tint.opacity(0.9)), in: Capsule(style: .continuous))
+        } else {
+            background(tint.opacity(0.92), in: Capsule(style: .continuous))
+                .shadow(color: .black.opacity(dark ? 0.3 : 0.2), radius: 10, y: 4)
+        }
+    }
+
     /// The bar under the detail view. `safeAreaBar` on iOS 26 gets the
     /// scroll-edge treatment; `safeAreaInset` is the same idea before it.
     @ViewBuilder
