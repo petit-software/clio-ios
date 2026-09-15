@@ -20,7 +20,7 @@ Four screens, all native SwiftUI, no third-party UI:
 
 | Screen | What it does |
 |---|---|
-| **Recordings** | The list, as square tiles two across under a heading per day. Newest first, title, the start of the transcript, time, duration. Search. Delete from a tile's long-press menu. A record button that is never more than one tap away. |
+| **Recordings** | The list. Newest first, title, date, duration, first line of the transcript. Search. Swipe to delete. A record button that is never more than one tap away. |
 | **Record** | Elapsed time, live level meter, the cap. Stop or cancel. Transcribes on stop and returns to the list with the new recording at the top. |
 | **Recording** | Playback with a scrubber, the transcript (selectable), an editable title, share, copy, delete. Later: an on-device summary. |
 | **Settings** | Model (download, select, delete), transcription (language, translate, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD), intelligence, about. |
@@ -259,11 +259,6 @@ floating capsule is white glass with the olive word in light mode and
 near-black glass with the lime word in dark mode; the pane is lime with
 the ink word in both. The record sheet's Stop button keeps its red: that
 is a stop, not the app's colour.
-
-The recordings are square tiles, two across, in a lazy grid under a
-heading per day rather than a `List`: the title on top, as much of the
-transcript as fits, the time and length along the bottom. A grid has no
-swipe, so delete is on the tile's long-press menu.
 
 The record sheet's meter is six capsules that stay put: circles at rest,
 each rising with the part of the voice it hears. `MeterAnalyzer` is the

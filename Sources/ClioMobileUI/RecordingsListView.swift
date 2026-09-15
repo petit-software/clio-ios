@@ -142,68 +142,49 @@ struct RecordingsListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    static let tileSpacing: CGFloat = 12
-
-    /// Square tiles, two across, under a heading per day. A grid has no
-    /// swipe, so delete is on the tile's long-press menu.
     private var list: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Self.tileSpacing) {
-                if model.models.installed.isEmpty {
-                    noModelBanner
-                }
-                ForEach(sections, id: \.day) { section in
-                    Text(section.day)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 4)
-                        .padding(.top, 8)
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: Self.tileSpacing),
-                                        GridItem(.flexible(), spacing: Self.tileSpacing)],
-                              spacing: Self.tileSpacing) {
-                        ForEach(section.recordings) { recording in
-                            NavigationLink(value: recording.id) {
-                                RecordingTile(recording: recording)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("Delete", systemImage: "trash", role: .destructive) {
-                                    model.library.delete(recording)
-                                }
-                            }
+        List {
+            if model.models.installed.isEmpty {
+                noModelBanner
+            }
+            ForEach(sections, id: \.day) { section in
+                Section(section.day) {
+                    ForEach(section.recordings) { recording in
+                        NavigationLink(value: recording.id) {
+                            RecordingRow(recording: recording)
+                        }
+                    }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            model.library.delete(section.recordings[index])
                         }
                     }
                 }
             }
-            .padding(.horizontal, 16)
         }
-        .background(Color.groupedBackground)
     }
 
     /// Recording works without a model — the audio is kept and can be
     /// transcribed later — but nobody should find that out from a failed
     /// row. Shown until something is installed.
     private var noModelBanner: some View {
-        Button(action: onSettings) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("No transcription model")
-                        .font(.headline)
-                    Text("Recordings are saved but not transcribed until one is downloaded.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+        Section {
+            Button(action: onSettings) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No transcription model")
+                            .font(.headline)
+                        Text("Recordings are saved but not transcribed until one is downloaded.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "arrow.down.circle")
+                        .foregroundStyle(.orange)
                 }
-            } icon: {
-                Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.orange)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(Color.tileBackground,
-                        in: RoundedRectangle(cornerRadius: RecordingTile.radius, style: .continuous))
+            .tint(.primary)
         }
-        .buttonStyle(.plain)
-        .padding(.top, 8)
     }
 
     private var filtered: [Recording] {
@@ -227,43 +208,31 @@ struct RecordingsListView: View {
     }
 }
 
-/// One recording as a square: the title on top, as much of the transcript
-/// as fits, the time and length along the bottom edge.
-struct RecordingTile: View {
+struct RecordingRow: View {
     let recording: Recording
 
-    static let radius: CGFloat = 20
-
     var body: some View {
-        Color.clear
-            .aspectRatio(1, contentMode: .fit)
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(recording.displayTitle)
-                        .font(.headline)
-                        .lineLimit(2)
-                    Text(recording.snippet)
-                        .font(.subheadline)
-                        .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
-                    Spacer(minLength: 0)
-                    HStack(spacing: 6) {
-                        Text(recording.createdAt, style: .time)
-                        Text("·")
-                        Text(Format.duration(recording.duration))
-                        if case .failed = recording.status {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(recording.displayTitle)
+                .font(.headline)
+                .lineLimit(1)
+            Text(recording.snippet)
+                .font(.subheadline)
+                .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Text(recording.createdAt, style: .time)
+                Text("·")
+                Text(Format.duration(recording.duration))
+                if case .failed = recording.status {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(14)
             }
-            .background(Color.tileBackground,
-                        in: RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -610,15 +579,6 @@ private extension Color {
         Color(uiColor: .systemGroupedBackground)
         #else
         Color(nsColor: .windowBackgroundColor)
-        #endif
-    }
-
-    /// A tile on that ground: what a grouped list's cell is.
-    static var tileBackground: Color {
-        #if os(iOS)
-        Color(uiColor: .secondarySystemGroupedBackground)
-        #else
-        Color(nsColor: .controlBackgroundColor)
         #endif
     }
 
