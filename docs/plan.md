@@ -193,7 +193,7 @@ the phone.
 
 Ships: a TestFlight build, once it has been run on a phone.
 
-### M5 — the transcript is the recording  ← this milestone
+### M5 — the transcript is the recording  ✓
 
 Two things a memo app needs that the loop did not give: a way from a
 sentence back to the sound of it, and a way to start recording without
@@ -220,7 +220,7 @@ finding the app first.
 Proves: the transcript and the audio are one thing, and the app can be
 started by voice or button without a tap in between.
 
-### M6 — the list, as asked
+### M6 — the list, as asked  ✓
 
 Five things from the todo, all on the way the app is used:
 
@@ -246,11 +246,19 @@ A recording that lands opens from the root, whichever way it was made.
 
 Two home layouts are kept side by side, `HomeStyle.pane` and
 `HomeStyle.floating`, switchable at launch with `CLIO_HOME`. The floating
-one is the default for now: the list runs the full height, a red capsule
-floats at the bottom, and under it a wash rises from solid red at the
+one is the default for now: the list runs the full height, a capsule
+floats at the bottom, and under it a wash rises from solid colour at the
 screen edge to nothing a little above the button, with the list scrolling
-through it. The pane is the earlier design, the list ending above a red
+through it. The pane is the earlier design, the list ending above a
 strip that is the button.
+
+The colour is the icon's, not red: `Accent.lime` is the green the icon's
+gradient ends in, `Accent.olive` the middle of that gradient for a word on
+white, `Accent.ink` its near-black top for a word on the lime. The
+floating capsule is white glass with the olive word in light mode and
+near-black glass with the lime word in dark mode; the pane is lime with
+the ink word in both. The record sheet's Stop button keeps its red: that
+is a stop, not the app's colour.
 
 The record sheet's meter is six capsules that stay put: circles at rest,
 each rising with the part of the voice it hears. `MeterAnalyzer` is the
@@ -277,12 +285,28 @@ xcrun simctl io booted screenshot record.png
 `CLIO_SIMULATE=1` runs on fixed recordings, a fake microphone and the stub
 engine; the only thing it writes is a synthesized tone per recording in a
 temporary folder, so playback and tap-to-seek work. `CLIO_SHOW` is
-`record`, `settings` or `detail`; `CLIO_AUTOPLAY=1` starts playback when
-the detail view appears. Debug builds only.
+`record`, `hold` (hold-to-record mid-hold, the wash swelling), `settings`
+or `detail`; `CLIO_AUTOPLAY=1` starts playback when the detail view
+appears; `CLIO_HOME` is `pane` or `floating`. Debug builds only.
+
+`xcodebuild test` needs the destination pinned to the simulator's OS or
+id (`OS=26.5`, or `id=<udid>` from `simctl list`): with the name alone it
+asks for the latest runtime, and the iPhone 17 Pro is not in it.
 
 ## What is proven, and what is not
 
-Verified by something repeatable, as of milestone 5:
+Verified by something repeatable, as of milestone 6:
+
+- the six-band analyser on synthesized signals: silence is six bars at
+  the floor, a low tone lifts the middle bars more than the outer ones, a
+  hiss lifts an outer bar and the meter falls back after
+  (`MeterAnalyzerTests`); the bars seen moving on the sheet from the
+  simulated microphone
+- pause and resume on the state machine, stop from either
+  (`CaptureTests`); hold-to-record settings round trip
+- both home layouts, the wash mid-hold, the sheet mid-countdown and
+  recording, in light and dark, on the simulator
+
 
 - **the real microphone, on a simulator.** `UITests/RecordFlowUITests`
   drives the real app: tap Record, the Mac's microphone runs through

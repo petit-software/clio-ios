@@ -4,10 +4,22 @@ import SwiftUI
 /// Two ways to put the record button under the list. Both kept, so the
 /// one that is not the default can be looked at: `CLIO_HOME=pane` or
 /// `CLIO_HOME=floating` at launch.
+/// The app's colour, taken from the icon: a lime that the icon's gradient
+/// ends in at the bottom, the olive from its middle for a word on white,
+/// and the near-black from its top for a word on the lime.
+enum Accent {
+    /// The bright green at the foot of the icon.
+    static let lime = Color(red: 0.816, green: 0.973, blue: 0.471)
+    /// The olive halfway up the icon, dark enough to read on white.
+    static let olive = Color(red: 0.376, green: 0.447, blue: 0.216)
+    /// The near-black at the top of the icon, for a word on the lime.
+    static let ink = Color(red: 0.075, green: 0.086, blue: 0.043)
+}
+
 public enum HomeStyle: String, Sendable {
-    /// The list ends above a red pane that is the button.
+    /// The list ends above a green pane that is the button.
     case pane
-    /// The list runs the full height; a red capsule floats over its
+    /// The list runs the full height; a capsule floats over its
     /// bottom edge on a gradient that fades up from the screen edge.
     case floating
 
@@ -68,7 +80,7 @@ struct RecordingsListView: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    /// The list scrolls under a red wash that rises from the bottom edge
+    /// The list scrolls under a green wash that rises from the bottom edge
     /// and is gone a little above the button; the button floats on it.
     private var floating: some View {
         content
@@ -251,9 +263,9 @@ struct FloatingRecordPane: View {
             ZStack(alignment: .bottom) {
                 LinearGradient(
                     stops: [
-                        .init(color: Color.red.opacity(0), location: 0),
-                        .init(color: Color.red.opacity(0.35 + 0.2 * swell), location: 0.45),
-                        .init(color: Color.red.opacity(0.95), location: 1),
+                        .init(color: Accent.lime.opacity(0), location: 0),
+                        .init(color: Accent.lime.opacity(0.35 + 0.2 * swell), location: 0.45),
+                        .init(color: Accent.lime.opacity(0.95), location: 1),
                     ],
                     startPoint: .top, endPoint: .bottom)
                     .frame(height: Self.washAboveButton + Self.buttonHeight
@@ -282,6 +294,7 @@ struct FloatingRecordPane: View {
 struct FloatingRecordButton: View {
     var onRecord: () -> Void
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
     @State private var pressing = false
 
     var body: some View {
@@ -315,10 +328,10 @@ struct FloatingRecordButton: View {
                 Text(subtitle).font(.caption2).opacity(0.85)
             }
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(colorScheme == .dark ? Accent.lime : Accent.olive)
         .frame(maxWidth: .infinity)
         .frame(height: FloatingRecordPane.buttonHeight)
-        .whiteGlass(dimmed: capture.state.isCapturing)
+        .capsuleGlass(dark: colorScheme == .dark, dimmed: capture.state.isCapturing)
         .contentShape(Capsule(style: .continuous))
     }
 
@@ -370,7 +383,7 @@ struct RecordPane: View {
 }
 
 /// The one control that matters. The whole strip under the list is the
-/// button: red from edge to edge and down through the home indicator,
+/// button: green from edge to edge and down through the home indicator,
 /// with the word on it. Not a capsule, not a toolbar item — a pane.
 struct RecordButton: View {
     var action: () -> Void
@@ -380,11 +393,11 @@ struct RecordButton: View {
         Button(action: action) {
             Text("Record")
                 .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Accent.ink)
                 .frame(maxWidth: .infinity)
                 .frame(height: 72)
                 .padding(.bottom, bottomInset)
-                .background(Color.red)
+                .background(Accent.lime)
                 .contentShape(Rectangle())
         }
         .buttonStyle(RecordStripStyle())
@@ -423,11 +436,11 @@ struct HoldRecordButton: View {
                     .opacity(0.8)
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Accent.ink)
         .frame(maxWidth: .infinity)
         .frame(height: 72)
         .padding(.bottom, bottomInset)
-        .background(capture.state.isCapturing ? Color.red.opacity(0.85) : Color.red)
+        .background(capture.state.isCapturing ? Accent.lime.opacity(0.85) : Accent.lime)
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0.1, maximumDistance: 60) {
             // Nothing on completion: the press itself is the action.
@@ -480,7 +493,7 @@ struct HoldRecordButton: View {
     }
 }
 
-/// The landscape button: a full-width red capsule that says "Record".
+/// The landscape button: a full-width green capsule that says "Record".
 struct RecordCapsule: View {
     var action: () -> Void
 
@@ -488,12 +501,13 @@ struct RecordCapsule: View {
         Button(action: action) {
             Text("Record")
                 .font(.title3.weight(.semibold))
+                .foregroundStyle(Accent.ink)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
         }
         .prominentStyle()
         .buttonBorderShape(.capsule)
-        .tint(.red)
+        .tint(Accent.lime)
         .controlSize(.large)
         .accessibilityHint("Starts a new recording")
     }
@@ -579,17 +593,19 @@ private extension Color {
 }
 
 private extension View {
-    /// White Liquid Glass on iOS 26, so the wash and the rows show through
-    /// the capsule under the red word; a plain white fill before it.
+    /// Liquid Glass on iOS 26, so the wash and the rows show through the
+    /// capsule under the word: white in light mode, near-black in dark. A
+    /// plain fill before iOS 26.
     @ViewBuilder
-    func whiteGlass(dimmed: Bool) -> some View {
+    func capsuleGlass(dark: Bool, dimmed: Bool) -> some View {
+        let tint = dark ? Accent.ink : Color.white
         if #available(iOS 26, macOS 26, *) {
-            glassEffect(.regular.tint(Color.white.opacity(dimmed ? 0.6 : 0.85)).interactive(),
+            glassEffect(.regular.tint(tint.opacity(dimmed ? 0.6 : 0.85)).interactive(),
                         in: Capsule(style: .continuous))
         } else {
-            background(dimmed ? Color.white.opacity(0.85) : Color.white,
+            background(dimmed ? tint.opacity(0.85) : tint,
                        in: Capsule(style: .continuous))
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                .shadow(color: .black.opacity(dark ? 0.4 : 0.15), radius: 12, y: 6)
         }
     }
 }
