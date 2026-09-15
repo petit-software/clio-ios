@@ -220,6 +220,30 @@ finding the app first.
 Proves: the transcript and the audio are one thing, and the app can be
 started by voice or button without a tap in between.
 
+### M6 — the list, as asked
+
+Five things from the todo, all on the way the app is used:
+
+- Settings is a list of pages, one per topic — Model, Transcription,
+  Text, Recording, Intelligence, About — each row showing the value that
+  matters: the active model, the language, the length cap, on or off
+- The player lives in a bar at the bottom of the detail view, scrubber
+  and times above the three transport buttons, and the transcript gets
+  the whole list
+- The record pane goes away while a search is in progress
+- The record screen is Scribia's recording sheet, copied and adapted: a
+  medium-height sheet on the dark capture surface, a three-second
+  countdown, the clock, a meter that remembers the last few seconds,
+  pause and resume, stop, start again, close with a discard confirmation,
+  and a pull to the large detent for a bigger clock. `CaptureController`
+  gained `pause`/`resume` and a `paused` state, and the recorder pauses
+  the engine in place.
+- "Hold to record" in Settings ▸ Recording: the pane itself records
+  while the finger is on it and stops when it lifts, showing the clock
+  and then "Transcribing…" until the recording opens. No sheet.
+
+A recording that lands opens from the root, whichever way it was made.
+
 ## Looking at it
 
 Any screen can be put on a simulator without tapping through to it, on

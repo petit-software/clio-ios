@@ -23,10 +23,6 @@ struct RecordingDetailView: View {
 
     private func content(_ recording: Recording) -> some View {
         List {
-            Section {
-                PlayerCard(player: player)
-            }
-
             Section("Transcript") {
                 transcript(recording)
             }
@@ -53,6 +49,7 @@ struct RecordingDetailView: View {
         }
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
+        .playerBar { PlayerBar(player: player) }
         .toolbar {
             // One menu. iOS 26 folds a second trailing item into an
             // overflow menu of its own anyway, so a separate share button
@@ -365,6 +362,60 @@ final class AudioPlayerController {
 
     func skip(_ seconds: TimeInterval) {
         seek(to: currentTime + seconds)
+    }
+}
+
+/// The player, in the bar at the bottom of the detail view: the scrubber
+/// with the times under it, and the three transport buttons.
+struct PlayerBar: View {
+    @Bindable var player: AudioPlayerController
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Slider(value: $player.currentTime, in: 0...max(player.duration, 0.01)) { editing in
+                if !editing { player.seek(to: player.currentTime) }
+            }
+            .disabled(!player.isAvailable)
+            HStack {
+                Text(Format.duration(player.currentTime)).monospacedDigit()
+                Spacer()
+                HStack(spacing: 36) {
+                    Button("Back 15 seconds", systemImage: "gobackward.15") { player.skip(-15) }
+                    Button(player.isPlaying ? "Pause" : "Play",
+                           systemImage: player.isPlaying ? "pause.fill" : "play.fill") {
+                        player.toggle()
+                    }
+                    .font(.system(size: 28))
+                    .contentTransition(.symbolEffect(.replace))
+                    Button("Forward 15 seconds", systemImage: "goforward.15") { player.skip(15) }
+                }
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .buttonStyle(.plain)
+                .disabled(!player.isAvailable)
+                Spacer()
+                Text("-" + Format.duration(max(0, player.duration - player.currentTime)))
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+}
+
+private extension View {
+    /// The bar under the detail view. `safeAreaBar` on iOS 26 gets the
+    /// scroll-edge treatment; `safeAreaInset` is the same idea before it.
+    @ViewBuilder
+    func playerBar<Bar: View>(@ViewBuilder _ bar: @escaping () -> Bar) -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            safeAreaBar(edge: .bottom) { bar() }
+        } else {
+            safeAreaInset(edge: .bottom) { bar().background(.bar) }
+        }
     }
 }
 

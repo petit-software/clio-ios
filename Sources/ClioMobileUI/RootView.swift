@@ -16,6 +16,7 @@ public struct RootView: View {
     @State private var path: [Recording.ID] = []
     @State private var showingSettings = false
     @State private var showingRecorder = false
+    @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
     private let initialScreen: InitialScreen
 
@@ -53,11 +54,24 @@ public struct RootView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .recorderCover(isPresented: $showingRecorder) {
-            RecordView { id in
-                showingRecorder = false
-                if let id { path = [id] }
+        .sheet(isPresented: $showingRecorder, onDismiss: { recorderDetent = .medium }) {
+            NavigationStack {
+                RecordView(presentationDetent: $recorderDetent) {
+                    showingRecorder = false
+                }
             }
+            .presentationDetents([.medium, .large], selection: $recorderDetent)
+            .presentationBackground(RecordSurface.background)
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled()
+        }
+        .onChange(of: model.capture.lastRecordingID) { _, id in
+            // A recording landed — from the sheet or from holding the
+            // button. Either way, it opens.
+            guard let id else { return }
+            showingRecorder = false
+            showingSettings = false
+            path = [id]
         }
         .onChange(of: model.capture.state, initial: true) { _, state in
             activity.update(for: state, maxSeconds: model.capture.maxSeconds)
@@ -72,20 +86,6 @@ public struct RootView: View {
                 showingRecorder = true
             }
         }
-    }
-}
-
-private extension View {
-    /// The record screen takes the whole display on a phone. `fullScreenCover`
-    /// does not exist on macOS, where the package is also built for tests.
-    @ViewBuilder
-    func recorderCover<Content: View>(isPresented: Binding<Bool>,
-                                      @ViewBuilder content: @escaping () -> Content) -> some View {
-        #if os(iOS)
-        fullScreenCover(isPresented: isPresented, content: content)
-        #else
-        sheet(isPresented: isPresented, content: content)
-        #endif
     }
 }
 

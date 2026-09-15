@@ -41,6 +41,10 @@ public protocol AudioCapturing: AnyObject, Sendable {
     var onEvent: (@Sendable (CaptureEvent) -> Void)? { get set }
     /// Start capturing. Returns once the hardware is running.
     func start(maxSeconds: Double) async throws
+    /// Hold the buffer where it is; the engine stops listening. `resume`
+    /// picks up in the same buffer.
+    func pause() async
+    func resume() async throws
     /// Stop and hand back everything captured.
     func stop() async -> CaptureResult
     /// Stop and throw it away.
@@ -179,6 +183,30 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
             isInterrupted = false
         }
         observeSystem()
+    }
+
+    /// The engine is paused, not stopped: the tap stays, the buffer keeps
+    /// its place, and `resume` is one `start()` away. Route changes and
+    /// interruptions while paused are left alone — `isInterrupted` covers
+    /// both — and resume restarts the engine on whatever is there then.
+    public func pause() async {
+        let shouldPause = lock.withLock {
+            guard isRunning, !isInterrupted else { return false }
+            isInterrupted = true
+            currentLevel = 0
+            return true
+        }
+        guard shouldPause else { return }
+        _ = ObjCException.catching { self.engine.pause() }
+    }
+
+    public func resume() async throws {
+        let shouldResume = lock.withLock { isRunning && isInterrupted }
+        guard shouldResume else { return }
+        guard restartEngine() else {
+            throw RecorderError.engineFailed("could not resume")
+        }
+        lock.withLock { isInterrupted = false }
     }
 
     public func stop() async -> CaptureResult {
@@ -557,12 +585,34 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
         onEvent?(event)
     }
 
+    public private(set) var pauseCount = 0
+    private var pausedAt: Date?
+    private var pausedTotal: TimeInterval = 0
+
+    public func pause() async {
+        lock.withLock {
+            guard startedAt != nil, pausedAt == nil else { return }
+            pauseCount += 1
+            pausedAt = Date()
+        }
+    }
+
+    public func resume() async throws {
+        lock.withLock {
+            guard let pausedAt else { return }
+            pausedTotal += Date().timeIntervalSince(pausedAt)
+            self.pausedAt = nil
+        }
+    }
+
     public func start(maxSeconds: Double) async throws {
         if let startError { throw startError }
         lock.withLock {
             startCount += 1
             self.maxSeconds = maxSeconds
             startedAt = Date()
+            pausedAt = nil
+            pausedTotal = 0
         }
     }
 
@@ -609,6 +659,7 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
     private var elapsedLocked: TimeInterval {
         if let simulatedElapsed { return simulatedElapsed }
         guard let startedAt else { return 0 }
-        return Date().timeIntervalSince(startedAt)
+        let end = pausedAt ?? Date()
+        return end.timeIntervalSince(startedAt) - pausedTotal
     }
 }

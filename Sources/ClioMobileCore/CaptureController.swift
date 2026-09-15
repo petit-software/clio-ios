@@ -18,19 +18,21 @@ public enum CaptureState: Sendable, Equatable {
     /// A call, Siri, or another app has the microphone. Nothing is being
     /// captured; the recording resumes when they let go, or stops here.
     case interrupted
+    /// The user pressed pause. Resumes on their say-so.
+    case paused
     case transcribing
     case failed(String)
 
     public var isBusy: Bool {
         switch self {
-        case .starting, .recording, .interrupted, .transcribing: return true
+        case .starting, .recording, .interrupted, .paused, .transcribing: return true
         case .idle, .failed: return false
         }
     }
 
     /// Recording, or paused mid-recording: the stop button applies.
     public var isCapturing: Bool {
-        self == .recording || self == .interrupted
+        self == .recording || self == .interrupted || self == .paused
     }
 
     public var label: String {
@@ -38,7 +40,7 @@ public enum CaptureState: Sendable, Equatable {
         case .idle: return ""
         case .starting: return "Starting…"
         case .recording: return "Listening"
-        case .interrupted: return "Paused"
+        case .interrupted, .paused: return "Paused"
         case .transcribing: return "Transcribing…"
         case .failed(let message): return message
         }
@@ -186,6 +188,24 @@ public final class CaptureController {
         }
     }
 
+    /// Hold the recording where it is. The elapsed time stops with it.
+    public func pause() async {
+        guard state == .recording else { return }
+        await recorder.pause()
+        state = .paused
+    }
+
+    public func resume() async {
+        guard state == .paused else { return }
+        do {
+            try await recorder.resume()
+            state = .recording
+        } catch {
+            // What was captured is kept and transcribed.
+            await stop()
+        }
+    }
+
     public func stop() async {
         guard state.isCapturing else { return }
         stopPolling()
@@ -197,7 +217,7 @@ public final class CaptureController {
 
     public func cancel() async {
         switch state {
-        case .starting, .recording, .interrupted:
+        case .starting, .recording, .interrupted, .paused:
             stopPolling()
             await recorder.cancel()
             state = .idle

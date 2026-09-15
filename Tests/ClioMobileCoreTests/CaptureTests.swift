@@ -319,6 +319,40 @@ struct CaptureTests {
         #expect(library.recordings.count == 1)
     }
 
+    @Test("Pause holds the clock and the recording; resume carries on; stop works from either")
+    @MainActor
+    func pauseAndResume() async throws {
+        let recorder = SimulatedRecorder()
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        try await Task.sleep(for: .milliseconds(120))
+        await controller.pause()
+        #expect(controller.state == .paused)
+        #expect(controller.state.isCapturing)
+        #expect(recorder.pauseCount == 1)
+        let frozen = recorder.elapsed
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(abs(recorder.elapsed - frozen) < 0.01, "the clock stops while paused")
+
+        await controller.resume()
+        #expect(controller.state == .recording)
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(recorder.elapsed > frozen)
+
+        await controller.pause()
+        await controller.stop()
+        #expect(controller.state == .idle)
+        #expect(library.recordings.count == 1, "stop from paused saves")
+
+        await controller.start()
+        await controller.pause()
+        await controller.cancel()
+        #expect(controller.state == .idle)
+        #expect(library.recordings.count == 1, "cancel from paused discards")
+    }
+
     @Test("Losing the microphone mid-recording keeps what was captured")
     @MainActor
     func microphoneLost() async throws {

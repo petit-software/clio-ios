@@ -24,7 +24,7 @@ final class RecordingActivityController {
         switch state {
         case .recording:
             startedAt == nil ? start(maxSeconds: maxSeconds) : setPaused(false)
-        case .interrupted:
+        case .interrupted, .paused:
             setPaused(true)
         case .idle, .starting, .transcribing, .failed:
             end()

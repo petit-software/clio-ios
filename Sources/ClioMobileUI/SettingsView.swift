@@ -1,8 +1,9 @@
 import ClioMobileCore
 import SwiftUI
 
-/// Settings, as a grouped form. Every control binds straight to the one
-/// `Settings` struct; the store debounces the writes.
+/// Settings: a list of pages, one per topic, each row showing the value
+/// that matters. Every control binds straight to the one `Settings`
+/// struct; the store debounces the writes.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -12,14 +13,63 @@ struct SettingsView: View {
         @Bindable var store = model.settings
         NavigationStack {
             Form {
-                modelSection
-                transcriptionSection(store)
-                textSection(store)
-                recordingSection(store)
-                intelligenceSection(store)
-                aboutSection
+                Section {
+                    AppHeader()
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+
+                Section {
+                    NavigationLink {
+                        ModelSettingsPage()
+                    } label: {
+                        LabeledContent("Model", value: activeModelName)
+                    }
+                } footer: {
+                    Text("Which Whisper model transcribes, downloading and deleting "
+                         + "models, and whether one stays loaded between recordings.")
+                }
+                Section {
+                    page("Transcription",
+                         value: TranscriptionLanguage.name(for: store.settings.language)) {
+                        transcriptionSection(store)
+                    }
+                } footer: {
+                    Text("The spoken language, translation to English, custom "
+                         + "vocabulary, and word replacements.")
+                }
+                Section {
+                    page("Text", value: textSummary(store)) {
+                        textSection(store)
+                    }
+                } footer: {
+                    Text("How a transcript is tidied: a capital at the start and "
+                         + "trailing punctuation.")
+                }
+                Section {
+                    page("Recording",
+                         value: RecordingLimit.label(seconds: store.settings.maxRecordingSeconds)) {
+                        recordingSection(store)
+                    }
+                } footer: {
+                    Text("The length cap, silence trimming, haptics, and hold to record.")
+                }
+                Section {
+                    page("Intelligence", value: intelligenceSummary(store)) {
+                        intelligenceSection(store)
+                    }
+                } footer: {
+                    Text("Titles and summaries from the language model built into iOS, "
+                         + "on the phone.")
+                }
+                Section {
+                    page("About", value: Self.version) {
+                        aboutSection
+                    }
+                }
             }
             .navigationTitle("Settings")
+            .inlineTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -28,14 +78,39 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Sections
+    // MARK: Rows and pages
 
-    private var modelSection: some View {
-        ModelSection()
+    /// A row that opens a page holding one of the sections below.
+    private func page<Content: View>(_ title: String, value: String,
+                                     @ViewBuilder content: @escaping () -> Content) -> some View {
+        NavigationLink {
+            Form { content() }
+                .navigationTitle(title)
+        } label: {
+            LabeledContent(title, value: value)
+        }
     }
 
+    private var activeModelName: String {
+        model.capture.activeModel?.displayName ?? "None"
+    }
+
+    private func textSummary(_ store: SettingsStore) -> String {
+        var on: [String] = []
+        if store.settings.capitalizeFirstLetter { on.append("Capitalize") }
+        if store.settings.trimTrailingPunctuation { on.append("Trim") }
+        return on.isEmpty ? "As spoken" : on.joined(separator: ", ")
+    }
+
+    private func intelligenceSummary(_ store: SettingsStore) -> String {
+        guard model.intelligence.availability.isAvailable else { return "Unavailable" }
+        return store.settings.generateSummaries ? "On" : "Off"
+    }
+
+    // MARK: Sections
+
     private func transcriptionSection(_ store: SettingsStore) -> some View {
-        Section("Transcription") {
+        Section {
             Picker("Language", selection: Binding(
                 get: { store.settings.language ?? "auto" },
                 set: { store.settings.language = $0 == "auto" ? nil : $0 })) {
@@ -63,7 +138,7 @@ struct SettingsView: View {
     }
 
     private func textSection(_ store: SettingsStore) -> some View {
-        Section("Text") {
+        Section {
             Toggle("Capitalize first letter", isOn: Binding(
                 get: { store.settings.capitalizeFirstLetter },
                 set: { store.settings.capitalizeFirstLetter = $0 }))
@@ -102,11 +177,14 @@ struct SettingsView: View {
             Toggle("Haptic feedback", isOn: Binding(
                 get: { store.settings.hapticFeedback },
                 set: { store.settings.hapticFeedback = $0 }))
-        } header: {
-            Text("Recording")
+            Toggle("Hold to record", isOn: Binding(
+                get: { store.settings.holdToRecord },
+                set: { store.settings.holdToRecord = $0 }))
         } footer: {
             Text("Silence at the start and end of a recording is cut before "
-                 + "transcription. Higher sensitivity keeps quieter speech.")
+                 + "transcription. Higher sensitivity keeps quieter speech. "
+                 + "With Hold to record on, the button records while your finger "
+                 + "is on it and stops when you let go.")
         }
     }
 
@@ -121,8 +199,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .font(.footnote)
             }
-        } header: {
-            Text("Intelligence")
         } footer: {
             Text(availability.isAvailable
                  ? "After each transcription the language model built into iOS "
@@ -152,8 +228,6 @@ struct SettingsView: View {
                 confirmingDeleteAll = true
             }
             .disabled(model.library.recordings.isEmpty)
-        } header: {
-            Text("About")
         } footer: {
             Text("Everything Clio records and transcribes stays on this phone.")
         }
@@ -179,6 +253,32 @@ struct SettingsView: View {
         case let (s?, nil): return s
         default: return "—"
         }
+    }
+}
+
+// MARK: - Header
+
+/// The app icon with the app's name under it, at the top of Settings.
+///
+/// The artwork is the Mac app's export, which carries its own rounded
+/// corners and anti-aliased edge, so it is drawn as is — no clip. The
+/// home-screen icon is that artwork with its corners filled for iOS's own
+/// mask, and clipping that back leaves a seam.
+struct AppHeader: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image("SettingsIcon")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 88, height: 88)
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+            Text("Clio")
+                .font(.title2.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Clio")
     }
 }
 
@@ -265,4 +365,15 @@ struct ReplacementsEditor: View {
                                  WordReplacement(find: "gonna", replace: "going to")]
     return NavigationStack { ReplacementsEditor() }
         .environment(AppModel.simulating(settings: settings))
+}
+
+private extension View {
+    @ViewBuilder
+    func inlineTitle() -> some View {
+        #if os(iOS)
+        navigationBarTitleDisplayMode(.inline)
+        #else
+        self
+        #endif
+    }
 }

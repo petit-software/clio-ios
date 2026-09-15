@@ -1,9 +1,17 @@
 import ClioMobileCore
 import SwiftUI
 
-/// Settings ▸ Model: the catalog, one row per model, each row in whatever
-/// state that model is in — downloadable, downloading, installed, selected,
-/// failed. Selecting is a tap on an installed row; the rest is a menu.
+/// Settings ▸ Model, as its own page.
+struct ModelSettingsPage: View {
+    var body: some View {
+        Form { ModelSection() }
+            .navigationTitle("Model")
+    }
+}
+
+/// The catalog, one row per model, each row in whatever state that model
+/// is in — downloadable, downloading, installed, selected, failed.
+/// Selecting is a tap on an installed row; the rest is a menu.
 struct ModelSection: View {
     @Environment(AppModel.self) private var model
 

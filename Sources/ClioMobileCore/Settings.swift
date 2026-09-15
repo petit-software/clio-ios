@@ -19,6 +19,10 @@ public struct Settings: Codable, Equatable, Sendable {
     /// this many seconds of Float32 at 16 kHz — 38 MB — while recording.
     public var maxRecordingSeconds: Double = 600
     public var hapticFeedback: Bool = true
+    /// Off: tapping Record opens the recording sheet. On: recording runs
+    /// while the finger is on the button and stops when it lifts — no
+    /// sheet, the button itself is the recorder.
+    public var holdToRecord: Bool = false
 
     // Transcription
     /// `nil` means auto-detect.
@@ -67,6 +71,7 @@ public struct Settings: Codable, Equatable, Sendable {
         vadSensitivity = min(1, max(0, read(.vadSensitivity, defaults.vadSensitivity)))
         maxRecordingSeconds = read(.maxRecordingSeconds, defaults.maxRecordingSeconds)
         hapticFeedback = read(.hapticFeedback, defaults.hapticFeedback)
+        holdToRecord = read(.holdToRecord, defaults.holdToRecord)
 
         language = readOptional(.language, String.self)
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)

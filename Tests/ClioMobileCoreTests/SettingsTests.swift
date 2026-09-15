@@ -1,5 +1,19 @@
 import Foundation
 import Testing
+
+@Suite("Settings additions")
+struct SettingsAdditionsTests {
+    @Test("Hold to record defaults off and survives a round trip")
+    func holdToRecord() throws {
+        #expect(Settings().holdToRecord == false)
+        var settings = Settings()
+        settings.holdToRecord = true
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).holdToRecord)
+        let old = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
+        #expect(old.holdToRecord == false)
+    }
+}
 @testable import ClioMobileCore
 
 @Suite("Settings")

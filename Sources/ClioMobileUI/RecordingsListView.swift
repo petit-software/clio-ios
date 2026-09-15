@@ -43,7 +43,7 @@ struct RecordingsListView: View {
                     CornerCaps(radius: Self.seamRadius, color: .windowBackground)
                         .frame(height: Self.seamRadius)
                 }
-            RecordButton(action: onRecord)
+            RecordPane(onRecord: onRecord)
                 .clipShape(.rect(topLeadingRadius: Self.seamRadius,
                                  topTrailingRadius: Self.seamRadius))
         }
@@ -182,6 +182,25 @@ struct RecordingRow: View {
     }
 }
 
+/// The pane under the list. Gone while a search is in progress — the
+/// keyboard is there, and the list is the point — and, with "Hold to
+/// record" on, the button is the recorder itself.
+struct RecordPane: View {
+    var onRecord: () -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(\.isSearching) private var isSearching
+
+    var body: some View {
+        if !isSearching {
+            if model.settings.settings.holdToRecord {
+                HoldRecordButton()
+            } else {
+                RecordButton(action: onRecord)
+            }
+        }
+    }
+}
+
 /// The one control that matters. The whole strip under the list is the
 /// button: red from edge to edge and down through the home indicator,
 /// with the word on it. Not a capsule, not a toolbar item — a pane.
@@ -206,6 +225,84 @@ struct RecordButton: View {
 
     /// The stack ignores the bottom safe area so the red reaches the screen
     /// edge; the word stays above the home indicator.
+    private var bottomInset: CGFloat {
+        #if os(iOS)
+        safeArea.bottom
+        #else
+        0
+        #endif
+    }
+}
+
+/// Press and hold: the microphone runs while the finger is down and stops
+/// when it lifts. The strip shows the clock while it runs, then
+/// "Transcribing…" until the recording opens.
+struct HoldRecordButton: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.safeAreaInsets) private var safeArea
+    @State private var pressing = false
+
+    var body: some View {
+        let capture = model.capture
+        VStack(spacing: 2) {
+            Text(title(capture))
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+            if let subtitle = subtitle(capture) {
+                Text(subtitle)
+                    .font(.footnote)
+                    .opacity(0.8)
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .frame(height: 72)
+        .padding(.bottom, bottomInset)
+        .background(capture.state.isCapturing ? Color.red.opacity(0.85) : Color.red)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.1, maximumDistance: 60) {
+            // Nothing on completion: the press itself is the action.
+        } onPressingChanged: { isPressing in
+            pressing = isPressing
+            Task { isPressing ? await press() : await release() }
+        }
+        .accessibilityLabel(capture.state.isCapturing ? "Recording. Release to stop." : "Record")
+        .accessibilityHint("Press and hold to record")
+    }
+
+    private func press() async {
+        guard model.capture.state == .idle || !model.capture.state.isBusy else { return }
+        if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
+        await model.capture.start()
+        // Let go before the microphone was ready: nothing to keep.
+        if !pressing, model.capture.state.isCapturing { await model.capture.stop() }
+    }
+
+    private func release() async {
+        guard model.capture.state.isCapturing else { return }
+        if model.settings.settings.hapticFeedback { Haptics.recordStopped() }
+        await model.capture.stop()
+    }
+
+    private func title(_ capture: CaptureController) -> String {
+        switch capture.state {
+        case .starting: return "Starting…"
+        case .recording, .interrupted, .paused: return Format.duration(capture.elapsed)
+        case .transcribing: return "Transcribing…"
+        case .idle, .failed: return "Hold to Record"
+        }
+    }
+
+    private func subtitle(_ capture: CaptureController) -> String? {
+        switch capture.state {
+        case .recording: return "Release to stop"
+        case .interrupted, .paused: return "Paused"
+        case .failed(let message): return message
+        default: return nil
+        }
+    }
+
     private var bottomInset: CGFloat {
         #if os(iOS)
         safeArea.bottom
