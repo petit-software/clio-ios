@@ -50,6 +50,7 @@ struct RecordingDetailView: View {
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
         .playerBar { PlayerBar(player: player) }
+        .closeInsteadOfBack { dismiss() }
         .toolbar {
             // One menu. iOS 26 folds a second trailing item into an
             // overflow menu of its own anyway, so a separate share button
@@ -84,7 +85,7 @@ struct RecordingDetailView: View {
                         confirmingDelete = true
                     }
                 } label: {
-                    Label("More", systemImage: "ellipsis.circle")
+                    Label("More", systemImage: "ellipsis")
                 }
             }
         }
@@ -237,6 +238,23 @@ struct RecordingDetailView: View {
 }
 
 private extension View {
+    /// The recording zooms out of its row, so it closes like a sheet: an
+    /// X where the stack would draw a back chevron. The zoom's own drag
+    /// still dismisses it.
+    @ViewBuilder
+    func closeInsteadOfBack(_ close: @escaping () -> Void) -> some View {
+        #if os(iOS)
+        navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark", action: close)
+                }
+            }
+        #else
+        self
+        #endif
+    }
+
     @ViewBuilder
     func navigationBarTitleDisplayModeInline() -> some View {
         #if os(iOS)

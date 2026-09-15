@@ -22,6 +22,10 @@ final class LibraryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Details"].waitForExistence(timeout: 5),
                       "the detail view opened from the row")
         XCTAssertTrue(app.staticTexts["Recorded"].exists)
+
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.staticTexts["Today"].waitForExistence(timeout: 5),
+                      "the X takes the recording away again")
     }
 
     /// The search field lives in the navigation bar's drawer: out of the
