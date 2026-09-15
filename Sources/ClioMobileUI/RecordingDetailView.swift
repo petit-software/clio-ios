@@ -431,14 +431,10 @@ final class AudioPlayerController {
         player.currentTime = min(max(0, time), player.duration)
         currentTime = player.currentTime
     }
-
-    func skip(_ seconds: TimeInterval) {
-        seek(to: currentTime + seconds)
-    }
 }
 
-/// The player, in the bar at the bottom of the detail view: the scrubber
-/// with the times under it, and the three transport buttons.
+/// The player, a card in the flow of the detail view: the scrubber with
+/// the times under it, and a lone play button to its right.
 
 /// A word and a symbol in a glass capsule, in the theme's inverse: white
 /// on a dark screen, near-black on a light one, so it reads as a note
@@ -493,34 +489,31 @@ struct PlayerCard: View {
     @State private var scrubbing = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            Slider(value: $player.currentTime, in: 0...max(player.duration, 0.01)) { editing in
-                scrubbing = editing
-                if !editing { player.seek(to: player.currentTime) }
-            }
-            .disabled(!player.isAvailable)
-
-            HStack {
-                Text(Format.duration(player.currentTime)).monospacedDigit()
-                Spacer()
-                Text("-" + Format.duration(max(0, player.duration - player.currentTime)))
-                    .monospacedDigit()
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            HStack(spacing: 40) {
-                Button("Back 15 seconds", systemImage: "gobackward.15") { player.skip(-15) }
-                Button(player.isPlaying ? "Pause" : "Play",
-                       systemImage: player.isPlaying ? "pause.fill" : "play.fill") {
-                    player.toggle()
+        HStack(alignment: .center, spacing: 16) {
+            VStack(spacing: 6) {
+                Slider(value: $player.currentTime, in: 0...max(player.duration, 0.01)) { editing in
+                    scrubbing = editing
+                    if !editing { player.seek(to: player.currentTime) }
                 }
-                .font(.system(size: 36))
-                .contentTransition(.symbolEffect(.replace))
-                Button("Forward 15 seconds", systemImage: "goforward.15") { player.skip(15) }
+                .disabled(!player.isAvailable)
+
+                HStack {
+                    Text(Format.duration(player.currentTime)).monospacedDigit()
+                    Spacer()
+                    Text("-" + Format.duration(max(0, player.duration - player.currentTime)))
+                        .monospacedDigit()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Button(player.isPlaying ? "Pause" : "Play",
+                   systemImage: player.isPlaying ? "pause.fill" : "play.fill") {
+                player.toggle()
             }
             .labelStyle(.iconOnly)
-            .font(.title2)
+            .font(.system(size: 28))
+            .contentTransition(.symbolEffect(.replace))
             .buttonStyle(.plain)
             .disabled(!player.isAvailable)
         }

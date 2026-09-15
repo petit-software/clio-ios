@@ -40,6 +40,44 @@ struct RecordingsListView: View {
     var onSettings: () -> Void = {}
 
     var body: some View {
+        if needsModelFirst {
+            downloadFirst
+        } else {
+            home
+        }
+    }
+
+    /// Nothing recorded and no model to transcribe with: the first thing
+    /// to do is download one, and the screen says only that — no title,
+    /// no search, no record button.
+    private var needsModelFirst: Bool {
+        model.library.recordings.isEmpty && model.models.installed.isEmpty
+    }
+
+    private var downloadFirst: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "arrow.down.circle")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 8)
+            Text("To start recording, download your local model first.")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text("Transcription runs on this phone. Nothing leaves it.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Download", action: onSettings)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.top, 8)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.groupedBackground)
+        .barHidden(true)
+    }
+
+    private var home: some View {
         Group {
             if verticalSizeClass == .compact {
                 landscape
@@ -81,6 +119,12 @@ struct RecordingsListView: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
+    /// A held recording is running: the list fades and shrinks away and
+    /// the clock takes the middle of the screen.
+    private var held: Bool {
+        model.settings.settings.holdToRecord && model.capture.state.isCapturing
+    }
+
     /// The list scrolls under a green wash that rises from the bottom edge
     /// and is gone a little above the button; the button floats on it.
     private var floating: some View {
@@ -91,6 +135,20 @@ struct RecordingsListView: View {
             .contentMargins(.bottom, FloatingRecordPane.buttonHeight
                                      + FloatingRecordPane.buttonBottomPadding
                                      + 16 + bottomInset, for: .scrollContent)
+            .opacity(held ? 0 : 1)
+            .scaleEffect(held ? 0.92 : 1)
+            .overlay {
+                if held {
+                    Text(Format.duration(model.capture.elapsed))
+                        .font(.system(size: 76, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .transition(.opacity.combined(with: .scale(scale: 1.08)))
+                        .accessibilityLabel("Recording, \(Format.duration(model.capture.elapsed))")
+                }
+            }
+            .barHidden(held)
+            .animation(.smooth(duration: 0.35), value: held)
             .overlay(alignment: .bottom) {
                 FloatingRecordPane(onRecord: onRecord)
             }
@@ -227,7 +285,7 @@ struct RecordingRow: View {
                 Text(recording.displayTitle)
                     .font(.headline)
                     .lineLimit(1)
-                Text(recording.snippet)
+                snippet
                     .font(.subheadline)
                     .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
                     .lineLimit(2)
@@ -248,9 +306,44 @@ struct RecordingRow: View {
         }
         .padding(.vertical, 2)
     }
+
+    /// The snippet, led by a text-and-badge symbol when there is an
+    /// outcome to show: a green check for a transcript, an orange cross
+    /// when nothing was heard. Palette rendering colors only the badge;
+    /// the text lines take the snippet's own color.
+    @ViewBuilder
+    private var snippet: some View {
+        switch recording.status {
+        case .transcribed:
+            Label { Text(recording.snippet) } icon: {
+                Image(systemName: "text.badge.checkmark")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.secondary, .green)
+            }
+        case .nothingHeard:
+            Label { Text(recording.snippet) } icon: {
+                Image(systemName: "text.badge.xmark")
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.tertiary, .orange)
+            }
+        case .pending, .failed:
+            Text(recording.snippet)
+        }
+    }
 }
 
 private extension View {
+    /// The navigation bar — title, search, the settings button — gone or
+    /// back; nothing on the host build.
+    @ViewBuilder
+    func barHidden(_ hidden: Bool) -> some View {
+        #if os(iOS)
+        toolbar(hidden ? .hidden : .visible, for: .navigationBar)
+        #else
+        self
+        #endif
+    }
+
     /// Liquid Glass on iOS 26, a thin material before it.
     @ViewBuilder
     func pillGlass() -> some View {
@@ -502,7 +595,7 @@ struct FloatingRecordButton: View {
     private func label(_ capture: CaptureController) -> some View {
         VStack(spacing: 1) {
             Text(title(capture))
-                .font(.title3.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
             if let subtitle = subtitle(capture) {

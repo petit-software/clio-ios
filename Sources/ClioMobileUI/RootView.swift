@@ -145,10 +145,14 @@ public enum LaunchOptions {
             return AppModel.live()
         }
         // `CLIO_STUB_LATENCY=3` makes the stub take three seconds, long
-        // enough to look at the transcribing state.
+        // enough to look at the transcribing state. `CLIO_EMPTY=1` is a
+        // fresh install: no recordings, no model.
         let seconds = ProcessInfo.processInfo.environment["CLIO_STUB_LATENCY"]
             .flatMap(Double.init) ?? 0.3
-        return AppModel.simulating(audio: true,
+        let empty = ProcessInfo.processInfo.environment["CLIO_EMPTY"] == "1"
+        return AppModel.simulating(recordings: empty ? [] : PreviewData.recordings,
+                                   audio: true,
+                                   models: PreviewData.models(installed: empty ? [] : [ModelManager.simulatedInstalled()]),
                                    engine: StubTranscriptionEngine(latency: .seconds(seconds)))
     }
 
