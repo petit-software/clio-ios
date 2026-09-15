@@ -11,7 +11,7 @@ struct ModelSettingsPage: View {
 
 /// The catalog, one row per model, each row in whatever state that model
 /// is in — downloadable, downloading, installed, selected, failed.
-/// Selecting is a tap on an installed row; the rest is a menu.
+/// Selecting is a tap on an installed row; deleting is a long press.
 struct ModelSection: View {
     @Environment(AppModel.self) private var model
 
@@ -59,22 +59,11 @@ private struct ModelRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(entry.displayName)
-                        .font(.body)
-                    if isActive {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.tint)
-                            .accessibilityLabel("Selected")
-                    }
-                }
+                Text(entry.displayName)
+                    .font(.body)
                 Text(detail)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                if let progress {
-                    ProgressView(value: progress.fraction)
-                        .padding(.top, 2)
-                }
                 if let failure {
                     Text(failure)
                         .font(.footnote)
@@ -82,11 +71,22 @@ private struct ModelRow: View {
                 }
             }
             Spacer(minLength: 8)
+            // One slot at the far right, the same size in every state, so
+            // the rows line up and keep their height as a download runs.
             trailing
+                .frame(width: Self.slot, height: Self.slot)
         }
         .contentShape(Rectangle())
         .onTapGesture {
             if installed != nil { model.select(model: entry.id) }
+        }
+        .contextMenu {
+            if installed != nil {
+                Button("Delete Model", systemImage: "trash", role: .destructive) {
+                    confirmingDelete = true
+                }
+                .disabled(model.capture.state.isBusy)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(installed != nil ? .isButton : [])
@@ -117,32 +117,27 @@ private struct ModelRow: View {
         return parts.joined(separator: " · ")
     }
 
+    static let slot: CGFloat = 28
+
+    /// What sits in the slot: a blue arrow to download, a small ring while
+    /// it comes down (tap to cancel), a green check once it is here —
+    /// filled for the one in use, outlined for the rest.
     @ViewBuilder
     private var trailing: some View {
-        if progress != nil {
-            Button("Cancel download", systemImage: "xmark.circle.fill") {
+        if let progress {
+            Button {
                 manager.cancel(entry.id)
-            }
-            .labelStyle(.iconOnly)
-            .foregroundStyle(.secondary)
-            .buttonStyle(.borderless)
-        } else if installed != nil {
-            Menu {
-                if !isActive {
-                    Button("Use This Model", systemImage: "checkmark") {
-                        model.select(model: entry.id)
-                    }
-                }
-                Button("Delete", systemImage: "trash", role: .destructive) {
-                    confirmingDelete = true
-                }
-                .disabled(model.capture.state.isBusy)
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(.secondary)
+                DownloadRing(fraction: progress.totalBytes > 0 ? progress.fraction : nil)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("More")
+            .accessibilityLabel("Cancel download")
+            .accessibilityValue(detail)
+        } else if installed != nil {
+            Image(systemName: isActive ? "checkmark.circle.fill" : "checkmark.circle")
+                .font(.title2)
+                .foregroundStyle(.green)
+                .accessibilityLabel(isActive ? "Selected" : "Installed")
         } else {
             Button(failure == nil ? "Download" : "Retry",
                    systemImage: "arrow.down.circle.fill") {
@@ -150,7 +145,35 @@ private struct ModelRow: View {
             }
             .labelStyle(.iconOnly)
             .font(.title2)
+            .foregroundStyle(.blue)
             .buttonStyle(.borderless)
+        }
+    }
+}
+
+/// A small circular progress ring, the size of the row's other icons: a
+/// faint track with a blue arc over it, or a spinner before the size is
+/// known.
+private struct DownloadRing: View {
+    /// Nil while the total is not yet known.
+    let fraction: Double?
+
+    var body: some View {
+        if let fraction {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+                Circle()
+                    .trim(from: 0, to: max(0.02, min(1, fraction)))
+                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 0.2), value: fraction)
+            }
+            .frame(width: 20, height: 20)
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 20, height: 20)
         }
     }
 }

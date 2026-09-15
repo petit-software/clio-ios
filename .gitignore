@@ -4,3 +4,6 @@
 .DS_Store
 DerivedData/
 .ultra/
+
+# Xcode-in-place builds
+build/

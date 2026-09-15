@@ -40,58 +40,35 @@ struct RecordingsListView: View {
     var onSettings: () -> Void = {}
 
     var body: some View {
-        if needsModelFirst {
-            downloadFirst
+        if model.library.recordings.isEmpty {
+            layout
         } else {
-            home
+            layout
+                .navigationTitle("Recordings")
+                // Under the title, not in the bottom bar where iOS 26 would
+                // put it: the bottom belongs to the record button alone.
+                // Out of the way until the list is pulled down.
+                .searchable(text: $query, placement: .searchPlacement, prompt: "Search transcripts")
         }
     }
 
-    /// Nothing recorded and no model to transcribe with: the first thing
-    /// to do is download one, and the screen says only that — no title,
-    /// no search, no record button.
+    @ViewBuilder
+    private var layout: some View {
+        if verticalSizeClass == .compact {
+            landscape
+        } else if style == .floating {
+            floating
+        } else {
+            portrait
+        }
+    }
+
+    /// Nothing recorded: the screen carries no title and no search, only
+    /// the empty message, the wash, the settings button in the bar, and
+    /// the record button. With no model to transcribe with either, the
+    /// first thing to do is download one, and the record button goes too.
     private var needsModelFirst: Bool {
         model.library.recordings.isEmpty && model.models.installed.isEmpty
-    }
-
-    private var downloadFirst: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "arrow.down.circle")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 8)
-            Text("To start recording, download your local model first.")
-                .font(.title3.weight(.semibold))
-                .multilineTextAlignment(.center)
-            Text("Transcription runs on this phone. Nothing leaves it.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Download", action: onSettings)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.top, 8)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.groupedBackground)
-        .barHidden(true)
-    }
-
-    private var home: some View {
-        Group {
-            if verticalSizeClass == .compact {
-                landscape
-            } else if style == .floating {
-                floating
-            } else {
-                portrait
-            }
-        }
-        .navigationTitle("Recordings")
-        // Under the title, not in the bottom bar where iOS 26 would put it:
-        // the bottom belongs to the record button alone. Out of the way
-        // until the list is pulled down.
-        .searchable(text: $query, placement: .searchPlacement, prompt: "Search transcripts")
     }
 
     static let seamRadius: CGFloat = 20
@@ -111,9 +88,11 @@ struct RecordingsListView: View {
                     CornerCaps(radius: Self.seamRadius, color: .windowBackground)
                         .frame(height: Self.seamRadius)
                 }
-            RecordPane(onRecord: onRecord)
-                .clipShape(.rect(topLeadingRadius: Self.seamRadius,
-                                 topTrailingRadius: Self.seamRadius))
+            if !needsModelFirst {
+                RecordPane(onRecord: onRecord)
+                    .clipShape(.rect(topLeadingRadius: Self.seamRadius,
+                                     topTrailingRadius: Self.seamRadius))
+            }
         }
         .background(Color.windowBackground, ignoresSafeAreaEdges: .bottom)
         .ignoresSafeArea(edges: .bottom)
@@ -150,7 +129,7 @@ struct RecordingsListView: View {
             .barHidden(held)
             .animation(.smooth(duration: 0.35), value: held)
             .overlay(alignment: .bottom) {
-                FloatingRecordPane(onRecord: onRecord)
+                FloatingRecordPane(onRecord: onRecord, showsButton: !needsModelFirst)
             }
             .ignoresSafeArea(edges: .bottom)
     }
@@ -169,11 +148,13 @@ struct RecordingsListView: View {
     private var landscape: some View {
         VStack(spacing: 0) {
             content
-            Divider()
-            RecordCapsule(action: onRecord)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.groupedBackground)
+            if !needsModelFirst {
+                Divider()
+                RecordCapsule(action: onRecord)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.groupedBackground)
+            }
         }
     }
 
@@ -182,14 +163,19 @@ struct RecordingsListView: View {
         Group {
             if model.library.recordings.isEmpty {
                 ContentUnavailableView {
-                    Label("No Recordings", systemImage: "waveform")
-                } description: {
-                    Text("Tap record, speak, and the transcript is made on this phone. "
-                         + "Nothing leaves it.")
+                    if model.models.installed.isEmpty {
+                        Label("Pick your local model to start recording.", systemImage: "cube.fill")
+                    } else {
+                        Label("No Recordings", systemImage: "waveform")
+                    }
                 } actions: {
                     if model.models.installed.isEmpty {
-                        Button("Download a Model", action: onSettings)
+                        Button("Download", action: onSettings)
+                            .fontWeight(.medium)
                             .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .tint(.black)
+                            .padding(.top, 12)
                     }
                 }
             } else if filtered.isEmpty {
@@ -281,11 +267,23 @@ struct RecordingRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            // One symbol for the row, beside the title and the snippet
+            // both: a text mark with a badge that says how the transcript
+            // went. Only the badge is coloured; the lines stay the text's.
+            if let badge {
+                Image(systemName: badge.name)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(badge.color, .primary)
+                    .font(.title3)
+                    .frame(width: 24)
+                    .padding(.top, 2)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(recording.displayTitle)
                     .font(.headline)
                     .lineLimit(1)
-                snippet
+                Text(recording.snippet)
                     .font(.subheadline)
                     .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
                     .lineLimit(2)
@@ -307,27 +305,13 @@ struct RecordingRow: View {
         .padding(.vertical, 2)
     }
 
-    /// The snippet, led by a text-and-badge symbol when there is an
-    /// outcome to show: a green check for a transcript, an orange cross
-    /// when nothing was heard. Palette rendering colors only the badge;
-    /// the text lines take the snippet's own color.
-    @ViewBuilder
-    private var snippet: some View {
+    /// A green check for a transcript, an orange cross when nothing was
+    /// heard; nothing while it is pending or failed, which say so in words.
+    private var badge: (name: String, color: Color)? {
         switch recording.status {
-        case .transcribed:
-            Label { Text(recording.snippet) } icon: {
-                Image(systemName: "text.badge.checkmark")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.secondary, .green)
-            }
-        case .nothingHeard:
-            Label { Text(recording.snippet) } icon: {
-                Image(systemName: "text.badge.xmark")
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.tertiary, .orange)
-            }
-        case .pending, .failed:
-            Text(recording.snippet)
+        case .transcribed: ("text.badge.checkmark", .green)
+        case .nothingHeard: ("text.badge.xmark", .orange)
+        case .pending, .failed: nil
         }
     }
 }
@@ -360,6 +344,9 @@ private extension View {
 /// while the finger is on it.
 struct FloatingRecordPane: View {
     var onRecord: () -> Void
+    /// Off, the wash stays and the button is left out: the screen has
+    /// nothing to record with yet.
+    var showsButton = true
     @Environment(AppModel.self) private var model
     @Environment(\.isSearching) private var isSearching
     @Environment(\.safeAreaInsets) private var safeArea
@@ -411,9 +398,11 @@ struct FloatingRecordPane: View {
                     .animation(.smooth(duration: 0.1), value: bands)
                     .frame(height: height)
                     .allowsHitTesting(false)
-                FloatingRecordButton(onRecord: onRecord)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, Self.buttonBottomPadding + bottomInset)
+                if showsButton {
+                    FloatingRecordButton(onRecord: onRecord)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, Self.buttonBottomPadding + bottomInset)
+                }
             }
             .animation(.smooth(duration: 0.3), value: held)
         }
