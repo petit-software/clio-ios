@@ -1,9 +1,5 @@
 import ClioMobileCore
 import SwiftUI
-#if canImport(BlurSwiftUI)
-import BlurSwiftUI
-import BlurUIKit
-#endif
 
 /// Two ways to put the record button under the list. Both kept, so the
 /// one that is not the default can be looked at: `CLIO_HOME=pane` or
@@ -310,7 +306,7 @@ struct FloatingRecordPane: View {
                 // Masked by the wash's shape, solid, not by its colour: masked
                 // by the colour it lived only in the thin band where the
                 // colour was neither gone nor opaque.
-                WashBlur(radius: held ? 8 : 3)
+                WashBlur(strength: held ? 1 : 0.6)
                     .frame(height: height)
                     .mask {
                         VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell,
@@ -451,34 +447,26 @@ struct VoiceWash: View, @preconcurrency Animatable {
     }
 }
 
-/// The blur under the wash, transparent at the top and full at the bottom.
-/// On iOS it is BlurUIKit's variable blur, a true gradient of radius; the
-/// host build, which has no UIKit, gets a material masked by a gradient,
-/// whose tint and blur fade together and read much the same.
+/// The blur under the wash: a material masked by a vertical gradient, so
+/// its tint and blur fade in together from the top of the wash. Not a
+/// variable blur — there is no public one, and the private one was tried
+/// and taken out — but it reads as one. `strength` is the material's
+/// opacity at the bottom, stronger while a held recording runs.
 struct WashBlur: View {
-    var radius: CGFloat
+    var strength: Double
 
     var body: some View {
-        #if canImport(BlurSwiftUI)
-        VariableBlur(direction: .up)
-            .maximumBlurRadius(radius)
-            // The wash colours the rows already; no grey on top of it.
-            .dimmingAlpha(nil)
-            // Full radius over the bottom third, where the button sits.
-            .blurStartingInset(.relative(fraction: 0.3))
-        #else
         Rectangle()
             .fill(.regularMaterial)
             .mask {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: .black.opacity(0.6), location: 0.45),
-                        .init(color: .black, location: 0.7),
+                        .init(color: .black.opacity(0.6 * strength), location: 0.45),
+                        .init(color: .black.opacity(strength), location: 0.7),
                     ],
                     startPoint: .top, endPoint: .bottom)
             }
-        #endif
     }
 }
 

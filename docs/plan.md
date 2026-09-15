@@ -260,15 +260,13 @@ through it. In hold-to-record the wash's top edge is the meter: a curve
 through the six bars across the width, drawn as pixel-aligned columns
 each with its own gradient, so a syllable lifts one side more than the
 other and the edge lies flat between words — the bars are gated in
-silence, unlike the raw level. Under the colour is a variable blur that
-comes on with it, masked by the wash so it follows the same edge,
-nothing at the top of the wash and the full radius by the button, and a
-stronger one while a held recording runs. It is BlurUIKit's
-(`TimOliver/BlurUIKit`, a package dependency, iOS only): UIKit's private
-variable-blur filter reached through a public property rather than the
-runtime, which the author calls a grey area and App Review has so far
-let through. The host build, which has no UIKit, gets a material masked
-by the same gradient instead. The pane is the earlier design, the list ending above a
+silence, unlike the raw level. Under the colour is a blur that
+comes on with it: a material masked by a vertical gradient and by the
+wash's shape, so the rows soften as they scroll in and are gone by the
+button, stronger while a held recording runs. Not a variable blur:
+there is no public one, and the private one (`TimOliver/BlurUIKit`) was
+tried, worked on the iOS 26 and 27 simulators, and was taken out again
+for being one dependency too many on a grey-area API. The pane is the earlier design, the list ending above a
 strip that is the button.
 
 The colour is the icon's, not red: `Accent.lime` is the green the icon's

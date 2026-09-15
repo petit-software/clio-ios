@@ -20,10 +20,6 @@ let package = Package(
         // CoreML Whisper with an Apple Neural Engine path. The same version
         // the Mac app pins, so the two engines behave the same.
         .package(url: "https://github.com/argmaxinc/WhisperKit", from: "1.1.0"),
-        // A real variable blur — UIKit's private CAFilter reached through
-        // a public property, not the runtime — under the record pane's
-        // wash. iOS only; the host build gets a masked material instead.
-        .package(url: "https://github.com/TimOliver/BlurUIKit", from: "1.5.0"),
     ],
     targets: [
         // Everything that is not SwiftUI: settings, the library of
@@ -40,13 +36,7 @@ let package = Package(
         .target(name: "ClioMobileActivity"),
         // Every view, plus AppModel. A library so #Preview renders
         // dependably.
-        .target(name: "ClioMobileUI",
-                dependencies: [
-                    "ClioMobileCore",
-                    "ClioMobileActivity",
-                    .product(name: "BlurSwiftUI", package: "BlurUIKit",
-                             condition: .when(platforms: [.iOS])),
-                ]),
+        .target(name: "ClioMobileUI", dependencies: ["ClioMobileCore", "ClioMobileActivity"]),
         .testTarget(name: "ClioMobileCoreTests", dependencies: ["ClioMobileCore"]),
     ]
 )
