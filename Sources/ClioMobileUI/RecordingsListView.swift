@@ -310,7 +310,7 @@ struct FloatingRecordPane: View {
             // the other, and it settles flat between words. The bars are
             // gated in silence, unlike the raw level, so it does not fidget
             // to room noise.
-            let bands = held ? capture.bands : []
+            let bands = held ? capture.bands : [Float](repeating: 0, count: MeterAnalyzer.barCount)
             let base = Self.washAboveButton + Self.buttonHeight
                      + Self.buttonBottomPadding + bottomInset
                      + (held ? Self.washWhileHeld : 0)
@@ -323,10 +323,12 @@ struct FloatingRecordPane: View {
                 WashBlur(radius: held ? 16 : 6)
                     .frame(height: height)
                     .mask {
-                        VoiceWash(bands: bands, base: base, swell: Self.washSwell, held: held)
+                        VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell, held: held)
+                            .animation(.smooth(duration: 0.1), value: bands)
                     }
                     .allowsHitTesting(false)
-                VoiceWash(bands: bands, base: base, swell: Self.washSwell, held: held)
+                VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell, held: held)
+                    .animation(.smooth(duration: 0.1), value: bands)
                     .frame(height: height)
                     .allowsHitTesting(false)
                 FloatingRecordButton(onRecord: onRecord)
@@ -346,30 +348,65 @@ struct FloatingRecordPane: View {
     }
 }
 
+/// Bar heights as a vector SwiftUI can interpolate, so the wash's edge
+/// glides between meter updates instead of stepping.
+struct BarVector: VectorArithmetic {
+    var values: [Double]
+
+    init(_ bands: [Float]) { values = bands.map(Double.init) }
+    init(values: [Double]) { self.values = values }
+
+    static var zero: BarVector { BarVector(values: []) }
+
+    static func + (lhs: BarVector, rhs: BarVector) -> BarVector {
+        BarVector(values: combine(lhs.values, rhs.values, +))
+    }
+    static func - (lhs: BarVector, rhs: BarVector) -> BarVector {
+        BarVector(values: combine(lhs.values, rhs.values, -))
+    }
+    mutating func scale(by rhs: Double) { values = values.map { $0 * rhs } }
+    var magnitudeSquared: Double { values.reduce(0) { $0 + $1 * $1 } }
+
+    /// Elementwise, the shorter side padded with zeros.
+    private static func combine(_ a: [Double], _ b: [Double],
+                                _ op: (Double, Double) -> Double) -> [Double] {
+        (0..<max(a.count, b.count)).map { i in
+            op(i < a.count ? a[i] : 0, i < b.count ? b[i] : 0)
+        }
+    }
+}
+
 /// The wash, drawn as a row of thin columns each with its own height and
 /// gradient: at silence a flat edge at `base`, with a voice a curve
 /// through the six meter bars up to `base + swell`. Each column's gradient
 /// runs from nothing at its own top to solid at the bottom, so the edge is
-/// soft wherever it is.
-struct VoiceWash: View {
-    var bands: [Float]
+/// soft wherever it is. Animatable in the bars and the base, so a syllable
+/// rises over a tenth of a second and the lift on hold eases in.
+struct VoiceWash: View, @preconcurrency Animatable {
+    var bars: BarVector
     var base: CGFloat
     var swell: CGFloat
     var held: Bool
     @Environment(\.displayScale) private var scale
 
+    var animatableData: AnimatablePair<CGFloat, BarVector> {
+        get { AnimatablePair(base, bars) }
+        set { base = newValue.first; bars = newValue.second }
+    }
+
     /// Below this a bar is silence: the edge does not move for a breath.
-    static let floor: Float = 0.06
-    static let columns = 48
+    static let floor = 0.06
+    static let columns = 96
 
     var body: some View {
-        Canvas(rendersAsynchronously: true) { context, size in
+        Canvas { context, size in
             let stops: [Gradient.Stop] = [
                 .init(color: Accent.lime.opacity(0), location: 0),
                 .init(color: Accent.lime.opacity(held ? 0.6 : 0.35), location: 0.45),
                 .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
             ]
             let gradient = Gradient(stops: stops)
+            let heights = Self.smoothed(bars.values)
             // Column edges on device pixels, no overlap: an edge between
             // pixels is drawn twice or half and shows as a seam.
             let edges = (0...Self.columns).map { column in
@@ -377,7 +414,7 @@ struct VoiceWash: View {
             }
             for column in 0..<Self.columns {
                 let x = (CGFloat(column) + 0.5) / CGFloat(Self.columns)
-                let h = min(size.height, base + swell * Self.lift(at: x, bands: bands))
+                let h = min(size.height, base + swell * Self.lift(at: x, heights: heights))
                 let rect = CGRect(x: edges[column], y: size.height - h,
                                   width: edges[column + 1] - edges[column], height: h)
                 context.fill(Path(rect),
@@ -388,18 +425,28 @@ struct VoiceWash: View {
         }
     }
 
+    /// The bars above the floor, each blended with its neighbours so a
+    /// loud one makes a hill and not a flame.
+    static func smoothed(_ bars: [Double]) -> [CGFloat] {
+        let raw = bars.map { max(0, ($0 - floor) / (1 - floor)) }
+        return raw.indices.map { i in
+            let left = i > 0 ? raw[i - 1] : raw[i]
+            let right = i + 1 < raw.count ? raw[i + 1] : raw[i]
+            return CGFloat(0.25 * left + 0.5 * raw[i] + 0.25 * right)
+        }
+    }
+
     /// The edge's height at `x` in 0…1 across the width: the bars laid out
     /// left to right, a cosine curve between neighbours, the ends held.
-    static func lift(at x: CGFloat, bands: [Float]) -> CGFloat {
-        guard !bands.isEmpty else { return 0 }
-        let count = CGFloat(bands.count)
-        let heights = bands.map { CGFloat(max(0, ($0 - floor) / (1 - floor))) }
+    static func lift(at x: CGFloat, heights: [CGFloat]) -> CGFloat {
+        guard !heights.isEmpty else { return 0 }
+        let count = CGFloat(heights.count)
         // Bar centres sit at (k + 0.5) / count.
         let position = x * count - 0.5
         let lower = Int(position.rounded(.down))
         let upper = lower + 1
         if lower < 0 { return heights[0] }
-        if upper >= bands.count { return heights[bands.count - 1] }
+        if upper >= heights.count { return heights[heights.count - 1] }
         let t = position - CGFloat(lower)
         let eased = (1 - cos(t * .pi)) / 2
         return heights[lower] + (heights[upper] - heights[lower]) * eased
@@ -487,11 +534,18 @@ struct FloatingRecordButton: View {
         guard !model.capture.state.isBusy else { return }
         if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
         await model.capture.start()
-        if !pressing, model.capture.state.isCapturing { await model.capture.stop() }
+        // Let go before the microphone was ready: nothing to keep.
+        if !pressing { await release() }
     }
 
+    /// Lifting the finger stops the recording — unless the press was a
+    /// tap, which throws it away rather than opening an empty recording.
     private func release() async {
         guard model.capture.state.isCapturing else { return }
+        guard model.capture.elapsed >= HoldRecordButton.minimumHold else {
+            await model.capture.cancel()
+            return
+        }
         if model.settings.settings.hapticFeedback { Haptics.recordStopped() }
         await model.capture.stop()
     }
@@ -603,16 +657,24 @@ struct HoldRecordButton: View {
         .accessibilityHint("Press and hold to record")
     }
 
+    /// A press shorter than this is a tap, not a recording: it is thrown
+    /// away instead of saved and opened as an empty recording.
+    static let minimumHold: TimeInterval = 0.5
+
     private func press() async {
         guard model.capture.state == .idle || !model.capture.state.isBusy else { return }
         if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
         await model.capture.start()
         // Let go before the microphone was ready: nothing to keep.
-        if !pressing, model.capture.state.isCapturing { await model.capture.stop() }
+        if !pressing { await release() }
     }
 
     private func release() async {
         guard model.capture.state.isCapturing else { return }
+        guard model.capture.elapsed >= Self.minimumHold else {
+            await model.capture.cancel()
+            return
+        }
         if model.settings.settings.hapticFeedback { Haptics.recordStopped() }
         await model.capture.stop()
     }
