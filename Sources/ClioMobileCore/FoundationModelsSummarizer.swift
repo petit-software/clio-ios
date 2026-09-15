@@ -89,8 +89,17 @@ public actor FoundationModelsSummarizer: SummaryEngine {
             return Message(errorDescription: "The on-device model declined to summarize this recording.")
         case .rateLimited:
             return Message(errorDescription: "The on-device model is busy. Try again in a moment.")
-        default:
-            return error
+        case .concurrentRequests:
+            return Message(errorDescription: "Another summary is being written. Try again in a moment.")
+        case .assetsUnavailable:
+            return Message(errorDescription: "The on-device model is not on this phone yet. "
+                           + "It downloads after Apple Intelligence is turned on; try again later.")
+        case .decodingFailure:
+            return Message(errorDescription: "The on-device model's answer could not be read. Try again.")
+        case .unsupportedGuide:
+            return Message(errorDescription: "The on-device model could not follow the summary format.")
+        @unknown default:
+            return Message(errorDescription: "The on-device model could not write a summary.")
         }
     }
 }

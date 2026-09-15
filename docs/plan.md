@@ -369,9 +369,13 @@ Not verified, and worth knowing:
   Screen banner and the paused state have not been looked at. If the app
   is killed mid-recording the activity outlives it until its stale date,
   the cap plus a minute; a phone shows the same.
-- **Foundation Models on a phone.** The engine is exercised on the host
-  when this Mac has Apple Intelligence on, and in the app only through the
-  stub. The simulator runs the real model only if the host Mac has Apple
+- **Foundation Models on a phone.** One run so far: the summary failed,
+  and the detail view showed the framework's own text, "GenerationError
+  error -1", because four of its cases had no sentence of their own. Every
+  case has one now, with a fallback for cases that do not exist yet; which
+  case the phone hit is not known until the fixed build runs there. The
+  engine is exercised on the host when this Mac has Apple Intelligence on,
+  and in the app only through the stub. The simulator runs the real model only if the host Mac has Apple
   Intelligence; a phone needs iOS 26 and an A17 Pro or later.
 - **Languages beyond English and Dutch.** The model supports a fixed set
   of locales. Whisper's language is checked against `supportsLocale` first
