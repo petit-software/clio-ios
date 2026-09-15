@@ -47,6 +47,16 @@ struct SettingsView: View {
                          + "trailing punctuation.")
                 }
                 Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { store.settings.appearance },
+                        set: { store.settings.appearance = $0 })) {
+                        ForEach(Appearance.allCases, id: \.self) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                } footer: {
+                    Text("Light, dark, or whatever the phone is set to.")
+                }
+                Section {
                     page("Recording",
                          value: RecordingLimit.label(seconds: store.settings.maxRecordingSeconds)) {
                         recordingSection(store)

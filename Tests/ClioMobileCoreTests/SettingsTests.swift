@@ -25,6 +25,18 @@ struct SettingsAdditionsTests {
         #expect(old.includeLocation == false)
     }
 
+    @Test("Appearance defaults to the system and survives a round trip")
+    func appearance() throws {
+        #expect(Settings().appearance == .system)
+        var settings = Settings()
+        settings.appearance = .dark
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).appearance == .dark)
+        let old = try JSONDecoder().decode(Settings.self, from: Data(#"{"appearance":"neon"}"#.utf8))
+        #expect(old.appearance == .system, "an unknown value falls back")
+        #expect(RecordingLimit.range.upperBound == 30)
+    }
+
     @Test("Intro shown defaults off and survives a round trip")
     func introShown() throws {
         #expect(Settings().introShown == false)
@@ -89,7 +101,7 @@ struct SettingsTests {
     @Test("Recording limit is chosen in whole minutes within the range")
     func recordingLimit() {
         #expect(RecordingLimit.minutes(seconds: 600) == 10)
-        #expect(RecordingLimit.minutes(seconds: 6_000) == 10)
+        #expect(RecordingLimit.minutes(seconds: 6_000) == 30)
         #expect(RecordingLimit.minutes(seconds: 0) == 1)
         #expect(RecordingLimit.minutes(seconds: 100) == 2)
         #expect(RecordingLimit.seconds(minutes: 3) == 180)

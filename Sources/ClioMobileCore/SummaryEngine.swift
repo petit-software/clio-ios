@@ -111,8 +111,10 @@ public enum SummaryPrompt {
         let quotes: Set<Character> = ["\"", "“", "”", "'", "‘", "’", "«", "»"]
         while let first = title.first, quotes.contains(first) { title.removeFirst() }
         while let last = title.last, quotes.contains(last) || last == "." { title.removeLast() }
+        // Five words at most: a title, not a sentence.
         return title
             .split(whereSeparator: { $0.isWhitespace })
+            .prefix(5)
             .joined(separator: " ")
     }
 }

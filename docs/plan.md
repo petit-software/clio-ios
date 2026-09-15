@@ -260,6 +260,11 @@ Developer ▸ Show Intro brings it back, and `CLIO_SHOW=intro` puts it on a
 simulator. Simulated launches count it as seen unless that is the screen
 asked for.
 
+A recording's name is what the user typed, else what the language
+model generated (five words at most), else the date and time — never
+the transcript's first words, which read as a title and are not.
+Settings ▸ Appearance picks light, dark or the phone's setting.
+
 Toasts — Copied, Transcribing — sit at the bottom of the screen, above
 the record button on the list, and fade and shrink in place rather than
 sliding.
@@ -472,7 +477,9 @@ Not verified, and worth knowing:
   built from the buffers that arrive, and install runs through the ObjC
   exception shim.
 - **Samples are kept in memory, the WAV is written at stop.** 10 minutes of
-  Float32 at 16 kHz is 38 MB — the Mac app holds the same. It keeps disk I/O
+  Float32 at 16 kHz is 38 MB — the Mac app holds the same. The cap goes
+  to 30 minutes in Settings, which is 115 MB held while recording; not
+  yet tried on a phone. It keeps disk I/O
   off the audio thread and the file is only ever complete or absent.
 - **Levels are polled, not pushed.** The tap thread writes one float under a
   lock; the controller reads it 30× a second on the main actor. Nothing on

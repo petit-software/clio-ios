@@ -15,8 +15,9 @@ public struct Settings: Codable, Equatable, Sendable {
     // Recording
     public var voiceActivityDetection: Bool = true
     public var vadSensitivity: Double = 0.5
-    /// Ten minutes, the top of the Settings stepper. The recorder holds
-    /// this many seconds of Float32 at 16 kHz — 38 MB — while recording.
+    /// Ten minutes; the Settings stepper goes to thirty. The recorder holds
+    /// this many seconds of Float32 at 16 kHz — 38 MB at ten minutes,
+    /// 115 MB at thirty — while recording.
     public var maxRecordingSeconds: Double = 600
     public var hapticFeedback: Bool = true
     /// Off: tapping Record opens the recording sheet. On: recording runs
@@ -34,6 +35,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var autoCopyTranscript: Bool = false
     /// The first-run sheet has been seen.
     public var introShown: Bool = false
+    /// Light, dark, or whatever the phone is set to.
+    public var appearance: Appearance = .system
     public var customVocabulary: [String] = []
     public var wordReplacements: [WordReplacement] = []
 
@@ -84,6 +87,7 @@ public struct Settings: Codable, Equatable, Sendable {
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)
         autoCopyTranscript = read(.autoCopyTranscript, defaults.autoCopyTranscript)
         introShown = read(.introShown, defaults.introShown)
+        appearance = read(.appearance, defaults.appearance)
         customVocabulary = read(.customVocabulary, defaults.customVocabulary)
         wordReplacements = read(.wordReplacements, defaults.wordReplacements)
 
@@ -112,8 +116,21 @@ public struct WordReplacement: Codable, Equatable, Sendable, Identifiable, Hasha
 ///
 /// Stored in seconds because that is what the recorder works in, but chosen
 /// in minutes: nobody sets a recording limit to the second.
+/// Settings ▸ Appearance.
+public enum Appearance: String, Codable, CaseIterable, Sendable {
+    case system, light, dark
+
+    public var name: String {
+        switch self {
+        case .system: "Follow System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+}
+
 public enum RecordingLimit {
-    public static let range: ClosedRange<Double> = 1...10
+    public static let range: ClosedRange<Double> = 1...30
 
     public static func minutes(seconds: Double) -> Double {
         let whole = (seconds / 60).rounded()

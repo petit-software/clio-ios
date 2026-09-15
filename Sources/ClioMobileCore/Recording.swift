@@ -97,21 +97,11 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
         if !trimmed.isEmpty { return trimmed }
         if let generated = generatedTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
            !generated.isEmpty { return generated }
-        if let derived = Self.title(from: transcript) { return derived }
+        // No name typed and none generated: the date and time, not the
+        // first words of the transcript, which read as a title and are not.
         return createdAt.formatted(date: .abbreviated, time: .shortened)
     }
 
-    /// The first handful of words of a transcript, as a title.
-    public static func title(from transcript: String, maxWords: Int = 6) -> String? {
-        let words = transcript
-            .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
-            .prefix(maxWords)
-            .map(String.init)
-        guard !words.isEmpty else { return nil }
-        var result = words.joined(separator: " ")
-        while let last = result.last, last.isPunctuation { result.removeLast() }
-        return result.isEmpty ? nil : result
-    }
 
     /// One line for the list row: the transcript collapsed, or what
     /// happened instead.

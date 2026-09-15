@@ -31,6 +31,7 @@ struct SummaryPromptTests {
     func cleanTitle() {
         #expect(SummaryPrompt.cleanTitle("“Dentist and the invoice.”") == "Dentist and the invoice")
         #expect(SummaryPrompt.cleanTitle("  Standup   notes\n") == "Standup notes")
+        #expect(SummaryPrompt.cleanTitle("One two three four five six seven") == "One two three four five")
         #expect(SummaryPrompt.cleanTitle("'Idee voor de tuin'") == "Idee voor de tuin")
     }
 }
@@ -41,7 +42,8 @@ struct RecordingTitleTests {
     @Test("The user's name wins, then the generated one, then the first words")
     func displayTitleOrder() {
         var recording = Recording(duration: 1, transcript: "Remember to call the plumber tomorrow")
-        #expect(recording.displayTitle == "Remember to call the plumber tomorrow")
+        #expect(recording.displayTitle == recording.createdAt.formatted(date: .abbreviated, time: .shortened),
+                "no name and none generated: the date, not the transcript's first words")
         recording.generatedTitle = "Call the plumber"
         #expect(recording.displayTitle == "Call the plumber")
         recording.title = "Plumber"
@@ -62,7 +64,8 @@ struct RecordingTitleTests {
         let decoded = try JSONDecoder().decode(Recording.self, from: Data(old.utf8))
         #expect(decoded.generatedTitle == nil)
         #expect(decoded.segments.isEmpty, "a recording from before segments still decodes")
-        #expect(decoded.displayTitle == "hello there")
+        #expect(decoded.displayTitle == decoded.createdAt.formatted(date: .abbreviated, time: .shortened),
+                "without a generated title the date names it, not the transcript")
     }
 }
 

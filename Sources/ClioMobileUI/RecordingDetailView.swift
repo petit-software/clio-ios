@@ -48,7 +48,8 @@ struct RecordingDetailView: View {
             Section {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
                     detail("Recorded",
-                           recording.createdAt.formatted(date: .long, time: .shortened))
+                           recording.createdAt.formatted(
+                               .dateTime.day().month(.abbreviated).year().hour().minute()))
                     detail("Length", Format.duration(recording.duration))
                     detail("Language", TranscriptionLanguage.name(for: recording.language))
                     if let modelID = recording.modelID {
@@ -76,11 +77,13 @@ struct RecordingDetailView: View {
                         }
                     }
                 }
-                .font(.system(.subheadline, design: .monospaced))
+                .font(.system(.caption, design: .monospaced))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listSectionSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+                // Inside the row's rounded corners, which clip whatever
+                // crosses them even with no background drawn.
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
         }
         .navigationTitle($title)
@@ -272,6 +275,7 @@ struct RecordingDetailView: View {
                 .foregroundStyle(.secondary)
                 .gridColumnAlignment(.leading)
             Text(value)
+                .fixedSize(horizontal: false, vertical: true)
                 .gridColumnAlignment(.leading)
         }
     }
@@ -531,6 +535,7 @@ struct PlayerCard: View {
             .contentTransition(.symbolEffect(.replace))
             .buttonStyle(.plain)
             .disabled(!player.isAvailable)
+            .padding(.trailing, 8)
         }
         .padding(.vertical, 8)
     }

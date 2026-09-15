@@ -13,7 +13,7 @@ public actor FoundationModelsSummarizer: SummaryEngine {
 
     @Generable(description: "A title and a summary for one voice recording.")
     struct Draft {
-        @Guide(description: "At most six words, in the language of the transcript. "
+        @Guide(description: "Four or five words at most, in the language of the transcript. "
                           + "No quotation marks, no full stop.")
         var title: String
         @Guide(description: "One to three plain sentences saying what was said, "

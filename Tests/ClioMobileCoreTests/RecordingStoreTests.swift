@@ -91,10 +91,10 @@ struct RecordingStoreTests {
         #expect(named.displayTitle == "Standup")
 
         let derived = Recording(duration: 1, transcript: "Remember to move the dentist appointment, to Thursday.")
-        #expect(derived.displayTitle == "Remember to move the dentist appointment")
+        #expect(derived.displayTitle == derived.createdAt.formatted(date: .abbreviated, time: .shortened),
+                "a transcript alone does not name a recording")
 
         let empty = Recording(createdAt: Date(timeIntervalSince1970: 0), duration: 1)
         #expect(!empty.displayTitle.isEmpty)
-        #expect(Recording.title(from: "   ") == nil)
     }
 }

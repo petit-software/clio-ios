@@ -50,6 +50,7 @@ struct ClioMobileApp: App {
         WindowGroup {
             RootView(initialScreen: initialScreen, homeStyle: homeStyle)
                 .environment(model)
+                .preferredColorScheme(model.settings.settings.appearance.colorScheme)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
