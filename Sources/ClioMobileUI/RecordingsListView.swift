@@ -214,9 +214,10 @@ struct RecordingsListView: View {
     }
 }
 
-/// A row: the title, the start of the transcript and the length on the
-/// left; the time it was recorded in a pill on the right, where a list
-/// would put its chevron. The day is the section above, not the row.
+/// A row: the title and the start of the transcript on the left, the
+/// length in a glass pill on the right, where a list would put its
+/// chevron. When it was recorded is the section heading above and the
+/// detail view; the row does not repeat it.
 struct RecordingRow: View {
     let recording: Recording
 
@@ -230,26 +231,34 @@ struct RecordingRow: View {
                     .font(.subheadline)
                     .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
                     .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(Format.duration(recording.duration))
-                    if case .failed = recording.status {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                    }
+                if case .failed = recording.status {
+                    Label("Not transcribed", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Text(recording.createdAt, style: .time)
+            Text(Format.duration(recording.duration))
                 .font(.caption.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(.quaternary, in: Capsule(style: .continuous))
+                .pillGlass()
         }
         .padding(.vertical, 2)
+    }
+}
+
+private extension View {
+    /// Liquid Glass on iOS 26, a thin material before it.
+    @ViewBuilder
+    func pillGlass() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            glassEffect(.regular, in: Capsule(style: .continuous))
+        } else {
+            background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        }
     }
 }
 
