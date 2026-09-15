@@ -151,9 +151,14 @@ struct RecordingsListView: View {
             ForEach(sections, id: \.day) { section in
                 Section(section.day) {
                     ForEach(section.recordings) { recording in
-                        NavigationLink(value: recording.id) {
-                            RecordingRow(recording: recording)
-                        }
+                        RecordingRow(recording: recording)
+                            // The link is behind the row, not around it,
+                            // so the list draws no chevron: the time pill
+                            // has the right edge.
+                            .background {
+                                NavigationLink(value: recording.id) { EmptyView() }
+                                    .opacity(0)
+                            }
                     }
                     .onDelete { offsets in
                         for index in offsets {
@@ -209,29 +214,40 @@ struct RecordingsListView: View {
     }
 }
 
+/// A row: the title, the start of the transcript and the length on the
+/// left; the time it was recorded in a pill on the right, where a list
+/// would put its chevron. The day is the section above, not the row.
 struct RecordingRow: View {
     let recording: Recording
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(recording.displayTitle)
-                .font(.headline)
-                .lineLimit(1)
-            Text(recording.snippet)
-                .font(.subheadline)
-                .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
-                .lineLimit(2)
-            HStack(spacing: 6) {
-                Text(recording.createdAt, style: .time)
-                Text("·")
-                Text(Format.duration(recording.duration))
-                if case .failed = recording.status {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(recording.displayTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(recording.snippet)
+                    .font(.subheadline)
+                    .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(Format.duration(recording.duration))
+                    if case .failed = recording.status {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Text(recording.createdAt, style: .time)
+                .font(.caption.weight(.medium))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.quaternary, in: Capsule(style: .continuous))
         }
         .padding(.vertical, 2)
     }
