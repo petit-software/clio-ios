@@ -23,7 +23,7 @@ Four screens, all native SwiftUI, no third-party UI:
 | **Recordings** | The list. Newest first, title, date, duration, first line of the transcript. Search. Swipe to delete. A record button that is never more than one tap away. |
 | **Record** | Elapsed time, live level meter, the cap. Stop or cancel. Transcribes on stop and returns to the list with the new recording at the top. |
 | **Recording** | Playback with a scrubber, the transcript (selectable), an editable title, share, copy, delete. Later: an on-device summary. |
-| **Settings** | Model (download, select, delete), transcription (language, translate, auto copy, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD), intelligence, about. |
+| **Settings** | Model (download, select, delete), transcription (language, translate, auto copy, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD, haptics, hold to record, location), intelligence, about. |
 
 "Local LLM" means two on-device models, both native:
 
@@ -272,6 +272,16 @@ floating capsule is white glass with the olive word in light mode and
 near-black glass with the lime word in dark mode; the pane is lime with
 the ink word in both. The record sheet's Stop button keeps its red: that
 is a stop, not the app's colour.
+
+Settings ▸ Recording ▸ "Include location": with it on, a recording is
+asked for one Core Location fix as it starts — the first within eight
+seconds, reverse-geocoded to street and town — and lands with it; the
+detail's table shows the place as a link into Maps. The permission is
+asked for when the switch is turned on, never mid-recording. Off by
+default; `RecordingLocation` decodes as optional, so old indexes and
+recordings made with it off are unchanged. The capture loop is proven on
+a stub provider (`LocationTests`); the real fix and the geocoder are a
+phone test.
 
 The record sheet's meter is six capsules that stay put: circles at rest,
 each rising with the part of the voice it hears. `MeterAnalyzer` is the

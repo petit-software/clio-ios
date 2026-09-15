@@ -199,6 +199,15 @@ struct SettingsView: View {
             Toggle("Hold to record", isOn: Binding(
                 get: { store.settings.holdToRecord },
                 set: { store.settings.holdToRecord = $0 }))
+            Toggle(isOn: Binding(
+                get: { store.settings.includeLocation },
+                set: { on in
+                    store.settings.includeLocation = on
+                    if on { model.capture.locations.requestAccess() }
+                })) {
+                Text("Include location")
+                Text("Where a recording was made is kept with it, on this phone.")
+            }
         } footer: {
             Text("Silence at the start and end of a recording is cut before "
                  + "transcription. Higher sensitivity keeps quieter speech. "

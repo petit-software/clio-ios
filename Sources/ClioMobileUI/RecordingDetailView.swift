@@ -56,6 +56,15 @@ struct RecordingDetailView: View {
                     if bytes > 0 {
                         detail("Audio", Format.bytes(bytes))
                     }
+                    if let location = recording.location {
+                        GridRow(alignment: .firstTextBaseline) {
+                            Text("Location")
+                                .foregroundStyle(.secondary)
+                                .gridColumnAlignment(.leading)
+                            Link(location.label, destination: mapsURL(location))
+                                .gridColumnAlignment(.leading)
+                        }
+                    }
                 }
                 .font(.subheadline)
                 .padding(.vertical, 2)
@@ -241,6 +250,16 @@ struct RecordingDetailView: View {
         let url = model.library.audioURL(for: recording)
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
         return Int64(size ?? 0)
+    }
+
+    /// The place in Maps, pinned as "Recording".
+    private func mapsURL(_ location: RecordingLocation) -> URL {
+        var parts = URLComponents(string: "https://maps.apple.com/")!
+        parts.queryItems = [
+            URLQueryItem(name: "ll", value: "\(location.latitude),\(location.longitude)"),
+            URLQueryItem(name: "q", value: "Recording"),
+        ]
+        return parts.url!
     }
 
     private func detail(_ label: LocalizedStringKey, _ value: String) -> some View {

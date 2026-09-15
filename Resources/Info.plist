@@ -52,6 +52,8 @@
 	     while it runs; see ClioMobileWidget. -->
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>With "Include location" on, Clio keeps where each recording was made with the recording. It stays on your phone.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Clio records your voice so it can be transcribed on this device. Audio never leaves your phone.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

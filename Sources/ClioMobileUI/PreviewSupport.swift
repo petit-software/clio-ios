@@ -24,7 +24,9 @@ public enum PreviewData {
                                           text: "and ask whether the invoice for March was ever sent."),
                         TranscriptSegment(start: 11.0, end: 14.6,
                                           text: "Also the balcony door still sticks in the heat."),
-                      ]),
+                      ],
+                      location: RecordingLocation(latitude: 52.3702, longitude: 4.8912,
+                                                  placeName: "Prinsengracht, Amsterdam")),
             Recording(createdAt: ago(3 * 3600), duration: 312,
                       title: "Standup notes",
                       transcript: "The migration ran clean on staging. Two flaky tests "

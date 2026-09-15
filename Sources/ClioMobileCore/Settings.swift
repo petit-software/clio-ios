@@ -23,6 +23,8 @@ public struct Settings: Codable, Equatable, Sendable {
     /// while the finger is on the button and stops when it lifts — no
     /// sheet, the button itself is the recorder.
     public var holdToRecord: Bool = false
+    /// Where each recording was made is saved with it.
+    public var includeLocation: Bool = false
 
     // Transcription
     /// `nil` means auto-detect.
@@ -74,6 +76,7 @@ public struct Settings: Codable, Equatable, Sendable {
         maxRecordingSeconds = read(.maxRecordingSeconds, defaults.maxRecordingSeconds)
         hapticFeedback = read(.hapticFeedback, defaults.hapticFeedback)
         holdToRecord = read(.holdToRecord, defaults.holdToRecord)
+        includeLocation = read(.includeLocation, defaults.includeLocation)
 
         language = readOptional(.language, String.self)
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)

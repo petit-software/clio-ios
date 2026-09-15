@@ -22,7 +22,8 @@ public final class AppModel {
                 models: ModelManager,
                 recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
-                summarizer: any SummaryEngine) {
+                summarizer: any SummaryEngine,
+                locations: any LocationProviding = StubLocationProvider()) {
         self.settings = settings
         self.library = library
         self.models = models
@@ -34,7 +35,8 @@ public final class AppModel {
                                          models: models,
                                          settings: settings,
                                          library: library,
-                                         intelligence: intelligence)
+                                         intelligence: intelligence,
+                                         locations: locations)
     }
 
     /// The real thing: WhisperKit on whatever is in the models folder, and
@@ -46,7 +48,8 @@ public final class AppModel {
                         models: ModelManager(),
                         recorder: AudioRecorder(),
                         engine: WhisperKitEngine(),
-                        summarizer: SummaryEngines.live())
+                        summarizer: SummaryEngines.live(),
+                        locations: CoreLocationProvider())
     }
 
     public static func simulating(

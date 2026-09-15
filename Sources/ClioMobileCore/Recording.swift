@@ -27,6 +27,8 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
     /// so an absolute path stored today is wrong tomorrow.
     public var audioFileName: String
     public var status: TranscriptStatus
+    /// Where it was made, when Settings ▸ Recording asks for it.
+    public var location: RecordingLocation?
 
     public init(id: UUID = UUID(),
                 createdAt: Date = Date(),
@@ -39,7 +41,8 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
                 generatedTitle: String? = nil,
                 segments: [TranscriptSegment] = [],
                 audioFileName: String? = nil,
-                status: TranscriptStatus = .transcribed) {
+                status: TranscriptStatus = .transcribed,
+                location: RecordingLocation? = nil) {
         self.id = id
         self.createdAt = createdAt
         self.duration = duration
@@ -52,6 +55,7 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.segments = segments
         self.audioFileName = audioFileName ?? "\(id.uuidString).wav"
         self.status = status
+        self.location = location
     }
 
     /// Field by field, like `Settings`. A recording index that will not
@@ -80,6 +84,7 @@ public struct Recording: Codable, Identifiable, Equatable, Hashable, Sendable {
         generatedTitle = readOptional(.generatedTitle, String.self)
         segments = read(.segments, [])
         status = read(.status, .transcribed)
+        location = readOptional(.location, RecordingLocation.self)
     }
 
     /// What the list shows.

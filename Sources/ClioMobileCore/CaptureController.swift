@@ -74,22 +74,27 @@ public final class CaptureController {
     /// Told about every transcript that lands, so a title and summary can
     /// follow. Optional: the loop is complete without it.
     public let intelligence: IntelligenceController?
+    /// Asked for a fix when a recording starts and the setting is on.
+    public let locations: any LocationProviding
 
     private var pollTask: Task<Void, Never>?
     private var transcribeTask: Task<Void, Never>?
+    private var locationTask: Task<RecordingLocation?, Never>?
 
     public init(recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
                 models: ModelManager,
                 settings: SettingsStore,
                 library: RecordingStore,
-                intelligence: IntelligenceController? = nil) {
+                intelligence: IntelligenceController? = nil,
+                locations: any LocationProviding = StubLocationProvider()) {
         self.recorder = recorder
         self.engine = engine
         self.models = models
         self.settings = settings
         self.library = library
         self.intelligence = intelligence
+        self.locations = locations
         models.onInstalledChanged = { [weak self] in self?.reconcileActiveModel() }
         reconcileActiveModel()
         recorder.onEvent = { [weak self] event in
@@ -180,6 +185,12 @@ public final class CaptureController {
         // A cancel can land while the hardware was starting.
         guard state == .starting else { return }
         state = .recording
+        // The fix is fetched while the user talks, so it is there by the
+        // time the recording is; a slow one is waited for at the end.
+        if settings.settings.includeLocation {
+            let locations = self.locations
+            locationTask = Task { await locations.currentLocation() }
+        }
         startPolling()
 
         // Warm the model while the user is still talking, whether or not it
@@ -221,6 +232,8 @@ public final class CaptureController {
         switch state {
         case .starting, .recording, .interrupted, .paused:
             stopPolling()
+            locationTask?.cancel()
+            locationTask = nil
             await recorder.cancel()
             state = .idle
         case .transcribing:
@@ -259,6 +272,8 @@ public final class CaptureController {
                                   duration: result.duration,
                                   audioFileName: audioURL.lastPathComponent,
                                   status: .pending)
+        recording.location = await locationTask?.value
+        locationTask = nil
 
         guard !result.samples.isEmpty else {
             recording.status = .nothingHeard
