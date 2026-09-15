@@ -30,14 +30,11 @@ struct RecordingDetailView: View {
                 transcript(recording)
             }
 
-            // The summary is the machine's note, not the recording: a
-            // sparkle, smaller type, and a card washed in the app's green,
-            // so it cannot be mistaken for the transcript above it.
+            // The summary is the machine's note, not the recording: a plain
+            // card like the transcript's, a grey sparkle to say which is which.
             if showsSummary(recording) {
                 Section("Summary") {
                     summarySection(recording)
-                        .listRowBackground(
-                            Accent.lime.opacity(colorScheme == .dark ? 0.14 : 0.28))
                 }
             }
 
@@ -214,12 +211,10 @@ struct RecordingDetailView: View {
         } else if let summary = recording.summary, !summary.isEmpty {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.callout)
-                    .foregroundStyle(colorScheme == .dark ? Accent.lime : Accent.olive)
+                    .foregroundStyle(.secondary)
                     .padding(.top, 2)
                     .accessibilityHidden(true)
                 Text(summary)
-                    .font(.callout)
                     .textSelection(.enabled)
             }
             .padding(.vertical, 4)
