@@ -6,6 +6,7 @@ import SwiftUI
 struct RecordingDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     let id: Recording.ID
     /// The transcript was copied on the way in (auto copy): say so.
     var copiedOnArrival = false
@@ -29,9 +30,14 @@ struct RecordingDetailView: View {
                 transcript(recording)
             }
 
+            // The summary is the machine's note, not the recording: a
+            // sparkle, smaller type, and a card washed in the app's green,
+            // so it cannot be mistaken for the transcript above it.
             if showsSummary(recording) {
                 Section("Summary") {
                     summarySection(recording)
+                        .listRowBackground(
+                            Accent.lime.opacity(colorScheme == .dark ? 0.14 : 0.28))
                 }
             }
 
@@ -192,9 +198,17 @@ struct RecordingDetailView: View {
             }
             .padding(.vertical, 4)
         } else if let summary = recording.summary, !summary.isEmpty {
-            Text(summary)
-                .textSelection(.enabled)
-                .padding(.vertical, 4)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.callout)
+                    .foregroundStyle(colorScheme == .dark ? Accent.lime : Accent.olive)
+                    .padding(.top, 2)
+                    .accessibilityHidden(true)
+                Text(summary)
+                    .font(.callout)
+                    .textSelection(.enabled)
+            }
+            .padding(.vertical, 4)
         } else {
             Button("Summarize", systemImage: "text.badge.star") {
                 model.intelligence.summarize(id)
