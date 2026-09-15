@@ -23,7 +23,7 @@ Four screens, all native SwiftUI, no third-party UI:
 | **Recordings** | The list. Newest first, title, date, duration, first line of the transcript. Search. Swipe to delete. A record button that is never more than one tap away. |
 | **Record** | Elapsed time, live level meter, the cap. Stop or cancel. Transcribes on stop and returns to the list with the new recording at the top. |
 | **Recording** | Playback with a scrubber, the transcript (selectable), an editable title, share, copy, delete. Later: an on-device summary. |
-| **Settings** | Model (download, select, delete), transcription (language, translate, auto copy, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD, haptics, hold to record, location), intelligence, about. |
+| **Settings** | Model (download, select, delete), transcription (language, translate, auto copy, vocabulary, replacements), text (capitalisation, punctuation), recording (cap, VAD, haptics, hold to record, location), intelligence, about, the Mac app on GitHub, Follow; Developer in debug builds. |
 
 "Local LLM" means two on-device models, both native:
 
@@ -250,6 +250,19 @@ button, shows one pill over the list — a spinner and "Transcribing" —
 until the recording opens; the sheet goes the moment Stop is tapped
 rather than staying to say the same thing. A recording opens with the
 stack's plain push; a zoom out of the row was tried and taken out.
+
+The first run opens an intro sheet over the library: the icon and name
+as in Settings, then the handful of things worth knowing — everything
+stays on the phone, titles and summaries from the model built into iOS,
+tap a sentence to hear it, hold to record, download a model first — and
+a Continue button. `Settings.introShown` remembers it; Settings ▸
+Developer ▸ Show Intro brings it back, and `CLIO_SHOW=intro` puts it on a
+simulator. Simulated launches count it as seen unless that is the screen
+asked for.
+
+Toasts — Copied, Transcribing — sit at the bottom of the screen, above
+the record button on the list, and fade and shrink in place rather than
+sliding.
 
 A fresh install — no recordings, no model — shows one thing: "To start
 recording, download your local model first." and a Download button into

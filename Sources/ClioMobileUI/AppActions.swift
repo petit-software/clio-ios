@@ -13,6 +13,8 @@ public final class AppActions {
 
     public enum Action: Sendable, Equatable {
         case record
+        /// Settings ▸ Developer: the first-run sheet again.
+        case showIntro
     }
 
     public var pending: Action?

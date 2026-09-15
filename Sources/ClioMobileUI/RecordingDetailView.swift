@@ -154,11 +154,11 @@ struct RecordingDetailView: View {
             // shown if the user has not typed a name of their own.
             if recording.title.isEmpty, title != newValue { title = newValue }
         }
-        .overlay(alignment: .top) {
+        .overlay(alignment: .bottom) {
             if copied {
                 Toast("Copied", systemImage: "square.filled.on.square")
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.bottom, 16)
+                    .transition(ToastLayout.transition)
             }
         }
     }
@@ -436,6 +436,20 @@ final class AudioPlayerController {
 /// The player, a card in the flow of the detail view: the scrubber with
 /// the times under it, and a lone play button to its right.
 
+/// Where a toast sits and how it goes.
+enum ToastLayout {
+    /// In place: it fades and shrinks where it is, no sliding in or out.
+    static var transition: AnyTransition {
+        .opacity.combined(with: .scale(scale: 0.85))
+    }
+
+    /// Room to sit above the floating record button on the list.
+    static func bottomInset(above safeAreaBottom: CGFloat) -> CGFloat {
+        FloatingRecordPane.buttonHeight + FloatingRecordPane.buttonBottomPadding
+            + safeAreaBottom + 16
+    }
+}
+
 /// A word and a symbol in a glass capsule, in the theme's inverse: white
 /// on a dark screen, near-black on a light one, so it reads as a note
 /// laid on top rather than another control.
@@ -453,6 +467,7 @@ struct Toast<Icon: View>: View {
         self.title = title
         self.icon = Image(systemName: systemImage)
     }
+
 
     var body: some View {
         let dark = colorScheme == .dark

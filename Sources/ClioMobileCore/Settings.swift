@@ -32,6 +32,8 @@ public struct Settings: Codable, Equatable, Sendable {
     public var translateToEnglish: Bool = false
     /// A finished transcript goes to the clipboard on its own.
     public var autoCopyTranscript: Bool = false
+    /// The first-run sheet has been seen.
+    public var introShown: Bool = false
     public var customVocabulary: [String] = []
     public var wordReplacements: [WordReplacement] = []
 
@@ -81,6 +83,7 @@ public struct Settings: Codable, Equatable, Sendable {
         language = readOptional(.language, String.self)
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)
         autoCopyTranscript = read(.autoCopyTranscript, defaults.autoCopyTranscript)
+        introShown = read(.introShown, defaults.introShown)
         customVocabulary = read(.customVocabulary, defaults.customVocabulary)
         wordReplacements = read(.wordReplacements, defaults.wordReplacements)
 

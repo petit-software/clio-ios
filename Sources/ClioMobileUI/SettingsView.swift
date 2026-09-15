@@ -66,6 +66,18 @@ struct SettingsView: View {
                     page("About", value: Self.version) {
                         aboutSection
                     }
+                    Link(destination: Self.macApp) {
+                        HStack {
+                            Text("Get Clio for macOS")
+                            Spacer()
+                            Text("GitHub")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "arrow.up.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .tint(.primary)
                     Link(destination: Self.follow) {
                         HStack {
                             Text("Follow")
@@ -282,8 +294,9 @@ struct SettingsView: View {
         count == 0 ? "None" : "\(count) \(noun)\(count == 1 ? "" : "s")"
     }
 
-    /// Where the Follow row goes.
+    /// Where the Follow row goes, and the Mac app's repository.
     private static let follow = URL(string: "https://x.com/bartbak_")!
+    private static let macApp = URL(string: "https://github.com/petit-software/clio")!
 
     private static var version: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String

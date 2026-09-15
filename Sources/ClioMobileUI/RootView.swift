@@ -6,6 +6,8 @@ import SwiftUI
 public enum InitialScreen: Equatable, Sendable {
     case library
     case record
+    /// The first-run sheet, over the library.
+    case intro
     case settings
     case detail(Recording.ID)
 }
@@ -16,6 +18,7 @@ public struct RootView: View {
     @State private var path: [Recording.ID] = []
     @State private var showingSettings = false
     @State private var showingRecorder = false
+    @State private var showingIntro = false
     @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
     /// The recording whose transcript went to the clipboard on landing.
@@ -29,6 +32,7 @@ public struct RootView: View {
         switch initialScreen {
         case .library: break
         case .record: _showingRecorder = State(initialValue: true)
+        case .intro: _showingIntro = State(initialValue: true)
         case .settings: _showingSettings = State(initialValue: true)
         case .detail(let id): _path = State(initialValue: [id])
         }
@@ -40,12 +44,13 @@ public struct RootView: View {
                 .environment(\.safeAreaInsets, proxy.safeAreaInsets)
                 // Between Stop and the recording opening: the sheet is gone,
                 // the hold button has been let go of, and this says what
-                // the wait is. The same pill either way.
-                .overlay(alignment: .top) {
+                // the wait is. The same pill either way, at the bottom,
+                // above the record button; it fades and shrinks in place.
+                .overlay(alignment: .bottom) {
                     if model.capture.state == .transcribing {
                         Toast("Transcribing") { ProgressView() }
-                            .padding(.top, 8)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .padding(.bottom, ToastLayout.bottomInset(above: proxy.safeAreaInsets.bottom))
+                            .transition(ToastLayout.transition)
                     }
                 }
                 .animation(.smooth(duration: 0.3), value: model.capture.state == .transcribing)
@@ -70,6 +75,13 @@ public struct RootView: View {
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
+        }
+        // The first run, and again from Settings ▸ Developer.
+        .sheet(isPresented: $showingIntro, onDismiss: { model.settings.settings.introShown = true }) {
+            IntroView { showingIntro = false }
+        }
+        .onAppear {
+            if !model.settings.settings.introShown { showingIntro = true }
         }
         .sheet(isPresented: $showingRecorder, onDismiss: { recorderDetent = .medium }) {
             NavigationStack {
@@ -106,6 +118,13 @@ public struct RootView: View {
             guard let action else { return }
             AppActions.shared.pending = nil
             switch action {
+            case .showIntro:
+                showingSettings = false
+                // The Settings sheet has to be down before another goes up.
+                Task {
+                    try? await Task.sleep(for: .milliseconds(450))
+                    showingIntro = true
+                }
             case .record:
                 showingSettings = false
                 path = []
@@ -153,11 +172,15 @@ public enum LaunchOptions {
         let seconds = environment["CLIO_STUB_LATENCY"].flatMap(Double.init) ?? 0.3
         let empty = environment["CLIO_EMPTY"] == "1"
         let mic = simulate == "mic"
+        // Seen already, unless the intro is the screen being looked at.
+        var settings = Settings()
+        settings.introShown = environment["CLIO_SHOW"] != "intro"
         return AppModel.simulating(
             recordings: empty || mic ? [] : PreviewData.recordings,
             // The audio store is a real folder, so a real recording's WAV
             // has somewhere to land.
             audio: true,
+            settings: settings,
             models: PreviewData.models(installed: empty ? [] : [ModelManager.simulatedInstalled()]),
             recorder: mic ? AudioRecorder() : SimulatedRecorder(),
             engine: StubTranscriptionEngine(latency: .seconds(seconds)))
@@ -177,6 +200,7 @@ public enum LaunchOptions {
     public static func initialScreen(for model: AppModel) -> InitialScreen {
         switch ProcessInfo.processInfo.environment["CLIO_SHOW"] {
         case "record": return .record
+        case "intro": return .intro
         case "hold":
             // Hold to record, mid-hold: the wash swelling with the voice.
             model.settings.settings.holdToRecord = true

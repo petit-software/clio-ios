@@ -27,6 +27,11 @@ struct DeveloperSettingsPage: View {
                      + "locations, and lengths from seconds to minutes over the past month. "
                      + "Audio is a synthesized tone. Delete them in About.")
             }
+            Section {
+                Button("Show Intro") { AppActions.shared.pending = .showIntro }
+            } footer: {
+                Text("The sheet a first run gets.")
+            }
             if let message {
                 Section {
                     Text(message).foregroundStyle(.secondary)

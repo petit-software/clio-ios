@@ -25,6 +25,17 @@ struct SettingsAdditionsTests {
         #expect(old.includeLocation == false)
     }
 
+    @Test("Intro shown defaults off and survives a round trip")
+    func introShown() throws {
+        #expect(Settings().introShown == false)
+        var settings = Settings()
+        settings.introShown = true
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).introShown)
+        let old = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
+        #expect(old.introShown == false)
+    }
+
     @Test("Auto copy defaults off and survives a round trip")
     func autoCopy() throws {
         #expect(Settings().autoCopyTranscript == false)
