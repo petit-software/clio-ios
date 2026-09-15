@@ -1,14 +1,31 @@
 import XCTest
 
-/// The search field lives in the navigation bar's drawer: out of the way
-/// once the list scrolls, back when the list is pulled down. Run on
-/// simulated recordings so there is enough list to scroll.
+/// The list on simulated recordings: the search drawer, and a row that
+/// opens its recording.
 @MainActor
-final class SearchDrawerUITests: XCTestCase {
+final class LibraryUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
+
+    /// The link sits behind the row, so a tap on the row itself must open
+    /// the recording.
+    func testTappingARowOpensTheRecording() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["CLIO_SIMULATE"] = "1"
+        app.launch()
+
+        let row = app.staticTexts["Standup notes"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Details"].waitForExistence(timeout: 5),
+                      "the detail view opened from the row")
+        XCTAssertTrue(app.staticTexts["Recorded"].exists)
+    }
+
+    /// The search field lives in the navigation bar's drawer: out of the
+    /// way once the list scrolls, back when the list is pulled down.
 
     func testSearchHidesOnScrollAndReturnsOnPull() throws {
         let app = XCUIApplication()

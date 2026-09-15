@@ -18,6 +18,8 @@ public struct RootView: View {
     @State private var showingRecorder = false
     @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
+    /// Shared by a row and its detail, so the detail zooms out of the row.
+    @Namespace private var zoom
     private let initialScreen: InitialScreen
     private let homeStyle: HomeStyle
 
@@ -41,10 +43,12 @@ public struct RootView: View {
     private var stack: some View {
         NavigationStack(path: $path) {
             RecordingsListView(style: homeStyle,
+                               zoom: zoom,
                                onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id)
+                        .navigationTransition(.zoom(sourceID: id, in: zoom))
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {

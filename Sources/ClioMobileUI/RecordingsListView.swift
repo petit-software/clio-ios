@@ -35,6 +35,8 @@ struct RecordingsListView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var query = ""
     var style: HomeStyle = .default
+    /// The root's namespace for the zoom into a recording; nil in previews.
+    var zoom: Namespace.ID? = nil
     var onRecord: () -> Void
     /// Opens Settings, for the banner when nothing is installed.
     var onSettings: () -> Void = {}
@@ -153,12 +155,13 @@ struct RecordingsListView: View {
                     ForEach(section.recordings) { recording in
                         RecordingRow(recording: recording)
                             // The link is behind the row, not around it,
-                            // so the list draws no chevron: the time pill
-                            // has the right edge.
+                            // so the list draws no chevron: the length
+                            // pill has the right edge.
                             .background {
                                 NavigationLink(value: recording.id) { EmptyView() }
                                     .opacity(0)
                             }
+                            .zoomSource(recording.id, in: zoom)
                     }
                     .onDelete { offsets in
                         for index in offsets {
@@ -251,6 +254,16 @@ struct RecordingRow: View {
 }
 
 private extension View {
+    /// The row the detail zooms out of, when there is a namespace to share.
+    @ViewBuilder
+    func zoomSource(_ id: Recording.ID, in namespace: Namespace.ID?) -> some View {
+        if let namespace {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
     /// Liquid Glass on iOS 26, a thin material before it.
     @ViewBuilder
     func pillGlass() -> some View {
