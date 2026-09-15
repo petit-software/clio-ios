@@ -66,21 +66,18 @@ struct SettingsView: View {
                     page("About", value: Self.version) {
                         aboutSection
                     }
-                }
-                Section {
                     Link(destination: Self.follow) {
                         HStack {
-                            Text("Follow @bartbak_ on X")
+                            Text("Follow")
                             Spacer()
+                            Text("@bartbak_")
+                                .foregroundStyle(.secondary)
                             Image(systemName: "arrow.up.right")
                                 .font(.footnote.weight(.semibold))
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                } header: {
-                    Text("Like the app?")
-                } footer: {
-                    Text("News about Clio, and the place to say what you would like next.")
+                    .tint(.primary)
                 }
             }
             .navigationTitle("Settings")
@@ -260,7 +257,7 @@ struct SettingsView: View {
         count == 0 ? "None" : "\(count) \(noun)\(count == 1 ? "" : "s")"
     }
 
-    /// Where the "Like the app?" row goes.
+    /// Where the Follow row goes.
     private static let follow = URL(string: "https://x.com/bartbak_")!
 
     private static var version: String {
