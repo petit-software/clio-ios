@@ -166,12 +166,9 @@ struct RecordView: View {
                         .contentTransition(.numericText(value: Double(seconds)))
                         .animation(.smooth(duration: RecordSurface.motion, extraBounce: 0), value: seconds)
 
-                    LevelHistoryMeter(level: { capture.level }, tint: RecordSurface.primary)
-                        .frame(height: isExpanded ? 120 : 64)
-                        .padding(.horizontal, isExpanded ? 0 : 12)
+                    VoiceBarsMeter(bands: capture.bands, tint: RecordSurface.primary)
+                        .frame(height: isExpanded ? 120 : 72)
                         .padding(.vertical, isExpanded ? 16 : 8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, isExpanded ? -24 : 0)
                         .opacity(capture.state == .recording ? 1 : 0.4)
 
                     if capture.state == .interrupted {
@@ -356,53 +353,31 @@ private extension View {
     }
 }
 
-/// A row of bars that remember: each sample shifts the row left, so the
-/// meter shows the last few seconds of level rather than one number.
-/// Copied from Scribia's `LevelMeterView`, fed from the controller's
-/// polled level.
-struct LevelHistoryMeter: View {
-    let level: () -> Float
+/// Six bars that stay where they are and react to the voice: circles at
+/// rest, each one rising with the part of the voice it hears. No timeline,
+/// nothing scrolls; the meter is a face, not a chart.
+struct VoiceBarsMeter: View {
+    let bands: [Float]
     var tint: Color = .primary
-    private let barCount = 32
-    private let barSpacing: CGFloat = 4
-    private let minLevel: Double = 0.02
-    private let noiseFloor: Double = 0.10
-    private let responseCurve: Double = 1.6
-    private let sampleInterval: Duration = .milliseconds(80)
-
-    @State private var samples: [Double] = Array(repeating: 0, count: 32)
+    private let spacing: CGFloat = 10
+    private let barWidth: CGFloat = 14
 
     var body: some View {
         GeometryReader { proxy in
-            let totalSpacing = barSpacing * CGFloat(barCount + 1)
-            let barWidth = max(2, (proxy.size.width - totalSpacing) / CGFloat(barCount))
-            HStack(alignment: .center, spacing: barSpacing) {
-                ForEach(samples.indices, id: \.self) { index in
+            let room = max(barWidth, proxy.size.height)
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(0..<MeterAnalyzer.barCount, id: \.self) { index in
+                    let level = index < bands.count ? CGFloat(bands[index]) : 0
                     Capsule(style: .continuous)
                         .fill(tint)
-                        .frame(width: barWidth,
-                               height: proxy.size.height * CGFloat(visualLevel(samples[index])))
+                        // A circle at rest; the whole height at full voice.
+                        .frame(width: barWidth, height: barWidth + level * (room - barWidth))
                 }
             }
-            .padding(.horizontal, barSpacing)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .task {
-            while !Task.isCancelled {
-                let next = Double(level())
-                withAnimation(.smooth(duration: 0.18)) {
-                    samples.removeFirst()
-                    samples.append(next)
-                }
-                try? await Task.sleep(for: sampleInterval)
-            }
+            .animation(.smooth(duration: 0.08), value: bands)
         }
         .accessibilityLabel("Audio level")
-    }
-
-    private func visualLevel(_ level: Double) -> Double {
-        let normalized = max(0, (level - noiseFloor) / (1 - noiseFloor))
-        return max(minLevel, pow(normalized, responseCurve))
     }
 }
 

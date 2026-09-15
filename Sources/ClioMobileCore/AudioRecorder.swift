@@ -51,6 +51,8 @@ public protocol AudioCapturing: AnyObject, Sendable {
     func cancel() async
     /// The current 0…1 level. Polled by the controller ~30×/s.
     var level: Float { get }
+    /// Six bars, 0…1 each, from `MeterAnalyzer`. Polled with the level.
+    var bands: [Float] { get }
     /// Seconds captured so far.
     var elapsed: TimeInterval { get }
     /// True once the cap has been hit; the controller then stops.
@@ -108,7 +110,10 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
     private var didReachLimit = false
     private var scaler = LevelScaler()
     private var currentLevel: Float = 0
+    private var currentBands = [Float](repeating: 0, count: MeterAnalyzer.barCount)
     private var isRunning = false
+    // Touched only by the tap thread.
+    private let meter = MeterAnalyzer()
 
     // Touched only by the tap thread.
     private var converter: AVAudioConverter?
@@ -150,7 +155,9 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
             didReachLimit = false
             scaler = LevelScaler()
             currentLevel = 0
+            currentBands = [Float](repeating: 0, count: MeterAnalyzer.barCount)
         }
+        meter.reset()
 
         try configureSession()
 
@@ -233,6 +240,11 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         return currentLevel
     }
 
+    public var bands: [Float] {
+        lock.lock(); defer { lock.unlock() }
+        return currentBands
+    }
+
     public var elapsed: TimeInterval {
         lock.lock(); defer { lock.unlock() }
         return Double(writeIndex) / Self.sampleRate
@@ -299,6 +311,7 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         isRunning = false
         isInterrupted = false
         currentLevel = 0
+        currentBands = [Float](repeating: 0, count: MeterAnalyzer.barCount)
         let observers = self.observers
         self.observers = []
         lock.unlock()
@@ -424,6 +437,18 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         }
         guard let converter else { return }
 
+        // The meter reads the hardware buffer, before it is resampled: a
+        // 48 kHz frame has the whole voice in it, and the analysis is sized
+        // to exactly this buffer.
+        var bands: [Float] = []
+        if let channel = pcmBuffer.floatChannelData?[0] {
+            let frames = Int(pcmBuffer.frameLength)
+            bands = meter.process(
+                UnsafeBufferPointer(start: channel, count: frames),
+                sampleRate: pcmBuffer.format.sampleRate,
+                dt: Float(Double(frames) / pcmBuffer.format.sampleRate))
+        }
+
         let ratio = target.sampleRate / pcmBuffer.format.sampleRate
         let capacity = AVAudioFrameCount(Double(pcmBuffer.frameLength) * ratio) + 1024
         guard let converted = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity)
@@ -467,6 +492,7 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
             if copied < count { didReachLimit = true }
         }
         currentLevel = scaler.level(rms: rms, dt: dt)
+        if !bands.isEmpty { currentBands = bands }
         lock.unlock()
     }
 }
@@ -644,6 +670,21 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
         guard startedAt != nil else { return 0 }
         // A slow pulse, so a preview meter visibly moves.
         return Float(0.5 + 0.4 * sin(Date().timeIntervalSinceReferenceDate * 4))
+    }
+
+    /// Six bars shaped like a voice: a slow pulse, the middle bars leading
+    /// and the outer ones a little behind and smaller.
+    public var bands: [Float] {
+        let base = level
+        guard base > 0 else { return [Float](repeating: 0, count: MeterAnalyzer.barCount) }
+        let t = Date().timeIntervalSinceReferenceDate
+        return (0..<MeterAnalyzer.barCount).map { bar in
+            let center = Double(MeterAnalyzer.barCount - 1) / 2
+            let distance = abs(Double(bar) - center) / center
+            let envelope = 1 - 0.6 * distance
+            let wobble = 0.15 * sin(t * (5 + Double(bar)) + Double(bar))
+            return Float(min(1, max(0, Double(base) * envelope + wobble)))
+        }
     }
 
     public var elapsed: TimeInterval {

@@ -60,6 +60,8 @@ public final class CaptureController {
     public private(set) var state: CaptureState = .idle
     /// 0…1, for the meter. Polled from the recorder ~30×/s while recording.
     public private(set) var level: Float = 0
+    /// Six bars, 0…1 each, polled with the level. See `MeterAnalyzer`.
+    public private(set) var bands: [Float] = Array(repeating: 0, count: MeterAnalyzer.barCount)
     public private(set) var elapsed: TimeInterval = 0
     /// The recording most recently added, so the UI can open it.
     public private(set) var lastRecordingID: Recording.ID?
@@ -366,6 +368,7 @@ public final class CaptureController {
             while !Task.isCancelled {
                 guard let self else { return }
                 self.level = self.recorder.level
+                self.bands = self.recorder.bands
                 self.elapsed = self.recorder.elapsed
                 if self.recorder.reachedLimit {
                     await self.stop()
@@ -380,5 +383,6 @@ public final class CaptureController {
         pollTask?.cancel()
         pollTask = nil
         level = 0
+        bands = Array(repeating: 0, count: MeterAnalyzer.barCount)
     }
 }

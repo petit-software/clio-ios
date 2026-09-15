@@ -244,6 +244,19 @@ Five things from the todo, all on the way the app is used:
 
 A recording that lands opens from the root, whichever way it was made.
 
+Two home layouts are kept side by side, `HomeStyle.pane` and
+`HomeStyle.floating`, switchable at launch with `CLIO_HOME`. The floating
+one is the default for now: the list runs the full height, a red capsule
+floats at the bottom, and under it a wash rises from solid red at the
+screen edge to nothing a little above the button, with the list scrolling
+through it. The pane is the earlier design, the list ending above a red
+strip that is the button.
+
+The record sheet's meter is six capsules that stay put: circles at rest,
+each rising with the part of the voice it hears. `MeterAnalyzer` is the
+Mac app's, widened to six bands, fed from the tap on the raw hardware
+buffer.
+
 ## Looking at it
 
 Any screen can be put on a simulator without tapping through to it, on
@@ -403,8 +416,10 @@ Not verified, and worth knowing:
 
 ## Open
 
-- Whether the level meter should share the Mac app's five-band analyser
-  (`MeterAnalyzer`, Accelerate) or stay a single RMS bar. Single bar for M1.
+- ~~Whether the level meter should share the Mac app's five-band analyser~~
+  It does, widened to six bands: the record sheet's meter is six capsules
+  that stay put, circles at rest, each hearing its own part of the voice.
+  The single RMS level is still polled for the hold-to-record pane.
 - Locked-phone recording needs `UIBackgroundModes: audio` — set in M1 — but
   interruption handling (a phone call mid-recording) is M4 and untested
   until then.

@@ -19,9 +19,11 @@ public struct RootView: View {
     @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
     private let initialScreen: InitialScreen
+    private let homeStyle: HomeStyle
 
-    public init(initialScreen: InitialScreen = .library) {
+    public init(initialScreen: InitialScreen = .library, homeStyle: HomeStyle = .default) {
         self.initialScreen = initialScreen
+        self.homeStyle = homeStyle
         switch initialScreen {
         case .library: break
         case .record: _showingRecorder = State(initialValue: true)
@@ -38,7 +40,8 @@ public struct RootView: View {
 
     private var stack: some View {
         NavigationStack(path: $path) {
-            RecordingsListView(onRecord: { showingRecorder = true },
+            RecordingsListView(style: homeStyle,
+                               onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id)
@@ -124,10 +127,21 @@ public enum LaunchOptions {
         ProcessInfo.processInfo.environment["CLIO_AUTOPLAY"] == "1"
     }
 
+    /// `CLIO_HOME=pane` or `floating`; the default otherwise.
+    public static var homeStyle: HomeStyle {
+        ProcessInfo.processInfo.environment["CLIO_HOME"].flatMap(HomeStyle.init(rawValue:))
+            ?? .default
+    }
+
     @MainActor
     public static func initialScreen(for model: AppModel) -> InitialScreen {
         switch ProcessInfo.processInfo.environment["CLIO_SHOW"] {
         case "record": return .record
+        case "hold":
+            // Hold to record, mid-hold: the wash swelling with the voice.
+            model.settings.settings.holdToRecord = true
+            Task { await model.capture.start() }
+            return .library
         case "settings": return .settings
         case "detail":
             if let first = model.library.recordings.first { return .detail(first.id) }

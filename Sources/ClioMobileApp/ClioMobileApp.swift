@@ -30,22 +30,25 @@ struct ClioMobileApp: App {
     #endif
     @State private var model: AppModel
     private let initialScreen: InitialScreen
+    private let homeStyle: HomeStyle
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         #if DEBUG
         let model = LaunchOptions.model()
         initialScreen = LaunchOptions.initialScreen(for: model)
+        homeStyle = LaunchOptions.homeStyle
         #else
         let model = AppModel.live()
         initialScreen = .library
+        homeStyle = .default
         #endif
         _model = State(initialValue: model)
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(initialScreen: initialScreen)
+            RootView(initialScreen: initialScreen, homeStyle: homeStyle)
                 .environment(model)
         }
         .onChange(of: scenePhase) { _, phase in

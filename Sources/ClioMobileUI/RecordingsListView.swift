@@ -1,13 +1,28 @@
 import ClioMobileCore
 import SwiftUI
 
+/// Two ways to put the record button under the list. Both kept, so the
+/// one that is not the default can be looked at: `CLIO_HOME=pane` or
+/// `CLIO_HOME=floating` at launch.
+public enum HomeStyle: String, Sendable {
+    /// The list ends above a red pane that is the button.
+    case pane
+    /// The list runs the full height; a red capsule floats over its
+    /// bottom edge on a gradient that fades up from the screen edge.
+    case floating
+
+    public static let `default`: HomeStyle = .floating
+}
+
 /// The library, newest first, grouped by day. The record button sits
-/// under it so it is never more than one tap away: a red pane of its own
-/// upright, a capsule when the phone is sideways and height is short.
+/// under it so it is never more than one tap away — as a pane or floating,
+/// see `HomeStyle`; a capsule when the phone is sideways and height is
+/// short.
 struct RecordingsListView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var query = ""
+    var style: HomeStyle = .default
     var onRecord: () -> Void
     /// Opens Settings, for the banner when nothing is installed.
     var onSettings: () -> Void = {}
@@ -16,6 +31,8 @@ struct RecordingsListView: View {
         Group {
             if verticalSizeClass == .compact {
                 landscape
+            } else if style == .floating {
+                floating
             } else {
                 portrait
             }
@@ -49,6 +66,31 @@ struct RecordingsListView: View {
         }
         .background(Color.windowBackground, ignoresSafeAreaEdges: .bottom)
         .ignoresSafeArea(edges: .bottom)
+    }
+
+    /// The list scrolls under a red wash that rises from the bottom edge
+    /// and is gone a little above the button; the button floats on it.
+    private var floating: some View {
+        content
+            // Room at the end of the list for the last row to scroll clear
+            // of the button; the container reaches through the bottom safe
+            // area so the wash runs to the screen edge.
+            .contentMargins(.bottom, FloatingRecordPane.buttonHeight
+                                     + FloatingRecordPane.buttonBottomPadding
+                                     + 16 + bottomInset, for: .scrollContent)
+            .overlay(alignment: .bottom) {
+                FloatingRecordPane(onRecord: onRecord)
+            }
+            .ignoresSafeArea(edges: .bottom)
+    }
+
+    @Environment(\.safeAreaInsets) private var safeArea
+    private var bottomInset: CGFloat {
+        #if os(iOS)
+        safeArea.bottom
+        #else
+        0
+        #endif
     }
 
     /// Sideways there is no height to give a pane to: a capsule under the
@@ -179,6 +221,132 @@ struct RecordingRow: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// The floating version: the gradient, and the capsule on it. Gone while
+/// a search is in progress. With "Hold to record" on, the capsule records
+/// while the finger is on it.
+struct FloatingRecordPane: View {
+    var onRecord: () -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(\.isSearching) private var isSearching
+    @Environment(\.safeAreaInsets) private var safeArea
+
+    /// How far above the button the wash reaches before it is gone.
+    static let washAboveButton: CGFloat = 72
+    static let buttonHeight: CGFloat = 56
+    static let buttonBottomPadding: CGFloat = 12
+
+    /// How much taller the wash gets at full voice, in hold-to-record.
+    static let washSwell: CGFloat = 220
+
+    var body: some View {
+        if !isSearching {
+            let capture = model.capture
+            let listening = model.settings.settings.holdToRecord && capture.state == .recording
+            // While a held recording runs, the wash is the meter: it swells
+            // up the screen with the voice and settles between words.
+            let swell = listening ? CGFloat(capture.level) : 0
+            ZStack(alignment: .bottom) {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.red.opacity(0), location: 0),
+                        .init(color: Color.red.opacity(0.35 + 0.2 * swell), location: 0.45),
+                        .init(color: Color.red.opacity(0.95), location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.washAboveButton + Self.buttonHeight
+                                 + Self.buttonBottomPadding + bottomInset
+                                 + swell * Self.washSwell)
+                    .animation(.smooth(duration: 0.12), value: swell)
+                    .allowsHitTesting(false)
+                FloatingRecordButton(onRecord: onRecord)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, Self.buttonBottomPadding + bottomInset)
+            }
+        }
+    }
+
+    private var bottomInset: CGFloat {
+        #if os(iOS)
+        safeArea.bottom
+        #else
+        0
+        #endif
+    }
+}
+
+/// The capsule that floats on the wash. A tap opens the sheet; with
+/// "Hold to record" on, a press records until the finger lifts.
+struct FloatingRecordButton: View {
+    var onRecord: () -> Void
+    @Environment(AppModel.self) private var model
+    @State private var pressing = false
+
+    var body: some View {
+        let capture = model.capture
+        let hold = model.settings.settings.holdToRecord
+        Group {
+            if hold {
+                label(capture)
+                    .onLongPressGesture(minimumDuration: 0.1, maximumDistance: 60) {
+                    } onPressingChanged: { isPressing in
+                        pressing = isPressing
+                        Task { isPressing ? await press() : await release() }
+                    }
+                    .accessibilityLabel(capture.state.isCapturing ? "Recording. Release to stop." : "Record")
+                    .accessibilityHint("Press and hold to record")
+            } else {
+                Button(action: onRecord) { label(capture) }
+                    .buttonStyle(RecordStripStyle())
+                    .accessibilityHint("Starts a new recording")
+            }
+        }
+    }
+
+    private func label(_ capture: CaptureController) -> some View {
+        VStack(spacing: 1) {
+            Text(title(capture))
+                .font(.title3.weight(.semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+            if let subtitle = subtitle(capture) {
+                Text(subtitle).font(.caption2).opacity(0.85)
+            }
+        }
+        .foregroundStyle(.red)
+        .frame(maxWidth: .infinity)
+        .frame(height: FloatingRecordPane.buttonHeight)
+        .whiteGlass(dimmed: capture.state.isCapturing)
+        .contentShape(Capsule(style: .continuous))
+    }
+
+    private func press() async {
+        guard !model.capture.state.isBusy else { return }
+        if model.settings.settings.hapticFeedback { Haptics.recordStarted() }
+        await model.capture.start()
+        if !pressing, model.capture.state.isCapturing { await model.capture.stop() }
+    }
+
+    private func release() async {
+        guard model.capture.state.isCapturing else { return }
+        if model.settings.settings.hapticFeedback { Haptics.recordStopped() }
+        await model.capture.stop()
+    }
+
+    /// No clock while holding: the finger is on the button and the wash
+    /// shows the voice. Only what happens after letting go is worth a word.
+    private func title(_ capture: CaptureController) -> String {
+        guard model.settings.settings.holdToRecord else { return "Record" }
+        switch capture.state {
+        case .transcribing: return "Transcribing…"
+        default: return "Record"
+        }
+    }
+
+    private func subtitle(_ capture: CaptureController) -> String? {
+        nil
     }
 }
 
@@ -407,5 +575,21 @@ private extension Color {
         #else
         Color(nsColor: .textBackgroundColor)
         #endif
+    }
+}
+
+private extension View {
+    /// White Liquid Glass on iOS 26, so the wash and the rows show through
+    /// the capsule under the red word; a plain white fill before it.
+    @ViewBuilder
+    func whiteGlass(dimmed: Bool) -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            glassEffect(.regular.tint(Color.white.opacity(dimmed ? 0.6 : 0.85)).interactive(),
+                        in: Capsule(style: .continuous))
+        } else {
+            background(dimmed ? Color.white.opacity(0.85) : Color.white,
+                       in: Capsule(style: .continuous))
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        }
     }
 }
