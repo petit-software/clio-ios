@@ -1,17 +1,16 @@
 import XCTest
 
-/// The real app on a simulator, through the real recorder: tap Record,
-/// let the Mac's microphone run for a moment, tap Stop, and a recording
-/// exists. Nothing here is simulated, which is the point — every other
-/// test runs the state machine on a fake microphone.
+/// The real recorder on a simulator: tap Record, let the Mac's
+/// microphone run for a moment, tap Stop, and a recording exists. The
+/// microphone is the real one, which is the point — every other test
+/// runs the state machine on a fake one. The model and the engine are
+/// simulated (`CLIO_SIMULATE=mic`), so the run does not depend on a
+/// download, and a fresh simulator is not sent to the download screen.
 ///
 ///     xcrun simctl privacy booted grant microphone com.bartbak.clio.ios
 ///     xcodebuild test -project Clio.xcodeproj -scheme Clio \
 ///       -only-testing:ClioUITests -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ///
-/// Without a model installed the recording is saved as failed with the
-/// "no model" message, which is the expected outcome on a fresh
-/// simulator; with one, it is transcribed. Either way the row is there.
 final class RecordFlowUITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -20,6 +19,7 @@ final class RecordFlowUITests: XCTestCase {
 
     func testRecordStopSavesARecording() throws {
         let app = XCUIApplication()
+        app.launchEnvironment["CLIO_SIMULATE"] = "mic"
         app.launch()
 
         // The permission prompt, if the grant above was not run.

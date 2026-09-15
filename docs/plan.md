@@ -251,6 +251,13 @@ until the recording opens; the sheet goes the moment Stop is tapped
 rather than staying to say the same thing. A recording opens with the
 stack's plain push; a zoom out of the row was tried and taken out.
 
+A fresh install — no recordings, no model — shows one thing: "To start
+recording, download your local model first." and a Download button into
+Settings ▸ Model; no title, search or record button until a model is
+there or a recording exists. In hold-to-record the list fades and
+shrinks away while the finger is down and the clock takes the middle of
+the screen.
+
 Two home layouts are kept side by side, `HomeStyle.pane` and
 `HomeStyle.floating`, switchable at launch with `CLIO_HOME`. The floating
 one is the default for now: the list runs the full height, a capsule
@@ -338,9 +345,12 @@ Verified by something repeatable, as of milestone 6:
 
 
 - **the real microphone, on a simulator.** `UITests/RecordFlowUITests`
-  drives the real app: tap Record, the Mac's microphone runs through
+  drives the app with the real recorder and everything else simulated
+  (`CLIO_SIMULATE=mic`): tap Record, the Mac's microphone runs through
   `AudioRecorder`, tap Stop, the recording opens with its player loaded
-  and is in the list. Run with `xcodebuild test -only-testing:ClioUITests`
+  and is in the list. A fresh install with no model shows the
+  download-first screen instead of a record button, so the test does
+  not run on the live model manager. Run with `xcodebuild test -only-testing:ClioUITests`
   after granting the microphone with `simctl privacy`.
 
 - segments come through the loop shifted by the trimmed lead, the

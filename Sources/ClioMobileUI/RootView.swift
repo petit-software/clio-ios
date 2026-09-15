@@ -141,19 +141,26 @@ public struct RootView: View {
 public enum LaunchOptions {
     @MainActor
     public static func model() -> AppModel {
-        guard ProcessInfo.processInfo.environment["CLIO_SIMULATE"] == "1" else {
-            return AppModel.live()
-        }
+        let environment = ProcessInfo.processInfo.environment
+        let simulate = environment["CLIO_SIMULATE"]
+        guard simulate == "1" || simulate == "mic" else { return AppModel.live() }
         // `CLIO_STUB_LATENCY=3` makes the stub take three seconds, long
         // enough to look at the transcribing state. `CLIO_EMPTY=1` is a
-        // fresh install: no recordings, no model.
-        let seconds = ProcessInfo.processInfo.environment["CLIO_STUB_LATENCY"]
-            .flatMap(Double.init) ?? 0.3
-        let empty = ProcessInfo.processInfo.environment["CLIO_EMPTY"] == "1"
-        return AppModel.simulating(recordings: empty ? [] : PreviewData.recordings,
-                                   audio: true,
-                                   models: PreviewData.models(installed: empty ? [] : [ModelManager.simulatedInstalled()]),
-                                   engine: StubTranscriptionEngine(latency: .seconds(seconds)))
+        // fresh install: no recordings, no model. `CLIO_SIMULATE=mic` is
+        // the real microphone with everything else simulated — an empty
+        // library, a model "installed", the stub engine — so the UI test
+        // records for real without depending on a download.
+        let seconds = environment["CLIO_STUB_LATENCY"].flatMap(Double.init) ?? 0.3
+        let empty = environment["CLIO_EMPTY"] == "1"
+        let mic = simulate == "mic"
+        return AppModel.simulating(
+            recordings: empty || mic ? [] : PreviewData.recordings,
+            // The audio store is a real folder, so a real recording's WAV
+            // has somewhere to land.
+            audio: true,
+            models: PreviewData.models(installed: empty ? [] : [ModelManager.simulatedInstalled()]),
+            recorder: mic ? AudioRecorder() : SimulatedRecorder(),
+            engine: StubTranscriptionEngine(latency: .seconds(seconds)))
     }
 
     public static var autoplay: Bool {
