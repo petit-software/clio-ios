@@ -509,7 +509,8 @@ struct FloatingRecordButton: View {
                 Text(subtitle).font(.caption2).opacity(0.85)
             }
         }
-        .foregroundStyle(colorScheme == .dark ? Accent.lime : Accent.olive)
+        // Plain: black on white glass in light mode, white on black in dark.
+        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
         // Quiet while the transcript is written: the pill at the top says so.
         .opacity(capture.state == .transcribing ? 0.5 : 1)
         .frame(maxWidth: .infinity)

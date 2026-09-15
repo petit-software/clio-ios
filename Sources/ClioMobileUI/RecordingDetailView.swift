@@ -44,8 +44,8 @@ struct RecordingDetailView: View {
                 PlayerCard(player: player)
             }
 
-            // A plain table, the way Photos lays out a picture's metadata:
-            // the labels in one column, the values in the other, one card.
+            // Bare metadata, the way Photos prints a picture's: two columns
+            // in a monospaced face, no card round them.
             Section("Details") {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
                     detail("Recorded",
@@ -64,13 +64,22 @@ struct RecordingDetailView: View {
                             Text("Location")
                                 .foregroundStyle(.secondary)
                                 .gridColumnAlignment(.leading)
-                            Link(location.label, destination: mapsURL(location))
-                                .gridColumnAlignment(.leading)
+                            Link(destination: mapsURL(location)) {
+                                HStack(spacing: 6) {
+                                    Text(location.label)
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .tint(.primary)
+                            .gridColumnAlignment(.leading)
                         }
                     }
                 }
-                .font(.subheadline)
-                .padding(.vertical, 2)
+                .font(.system(.subheadline, design: .monospaced))
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
             }
         }
         .navigationTitle($title)
