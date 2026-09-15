@@ -67,6 +67,21 @@ struct SettingsView: View {
                         aboutSection
                     }
                 }
+                Section {
+                    Link(destination: Self.follow) {
+                        HStack {
+                            Text("Follow @bartbak_ on X")
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                } header: {
+                    Text("Like the app?")
+                } footer: {
+                    Text("News about Clio, and the place to say what you would like next.")
+                }
             }
             .navigationTitle("Settings")
             .inlineTitle()
@@ -244,6 +259,9 @@ struct SettingsView: View {
     private func countLabel(_ count: Int, _ noun: String) -> String {
         count == 0 ? "None" : "\(count) \(noun)\(count == 1 ? "" : "s")"
     }
+
+    /// Where the "Like the app?" row goes.
+    private static let follow = URL(string: "https://x.com/bartbak_")!
 
     private static var version: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
