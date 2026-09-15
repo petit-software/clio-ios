@@ -296,48 +296,44 @@ struct FloatingRecordPane: View {
     /// How much taller the wash is while a held recording runs, before the
     /// voice adds to it: the recording has to be visible from across the
     /// room, not only heard in the meter.
-    static let washWhileHeld: CGFloat = 200
+    static let washWhileHeld: CGFloat = 80
     /// How much taller again at full voice, in hold-to-record.
-    static let washSwell: CGFloat = 200
+    static let washSwell: CGFloat = 150
 
     var body: some View {
         if !isSearching {
             let capture = model.capture
             let held = model.settings.settings.holdToRecord && capture.state.isCapturing
             // While a held recording runs the wash steps up and brightens,
-            // and on top of that it is the meter: it swells up the screen
-            // with the voice and settles between words.
-            let swell = held ? CGFloat(capture.level) : 0
-            let lift = held ? Self.washWhileHeld : 0
-            let height = Self.washAboveButton + Self.buttonHeight
-                       + Self.buttonBottomPadding + bottomInset
-                       + lift + swell * Self.washSwell
+            // and on top of that it is the meter: its top edge is a curve
+            // through the six bars, so a syllable lifts one side more than
+            // the other, and it settles flat between words. The bars are
+            // gated in silence, unlike the raw level, so it does not fidget
+            // to room noise.
+            let bands = held ? capture.bands : []
+            let base = Self.washAboveButton + Self.buttonHeight
+                     + Self.buttonBottomPadding + bottomInset
+                     + (held ? Self.washWhileHeld : 0)
+            let height = base + Self.washSwell
             ZStack(alignment: .bottom) {
                 // Under the colour, a blur that comes on with it: nothing at
                 // the top of the wash, the full radius by the button, so the
                 // rows soften as they scroll in and are gone by the button.
-                // Stronger while a held recording runs.
+                // Masked by the wash itself, so it follows the same edge.
                 WashBlur(radius: held ? 16 : 6)
                     .frame(height: height)
-                    .animation(.smooth(duration: 0.12), value: swell)
-                    .animation(.smooth(duration: 0.3), value: held)
+                    .mask {
+                        VoiceWash(bands: bands, base: base, swell: Self.washSwell, held: held)
+                    }
                     .allowsHitTesting(false)
-                LinearGradient(
-                    stops: [
-                        .init(color: Accent.lime.opacity(0), location: 0),
-                        .init(color: Accent.lime.opacity((held ? 0.6 : 0.35) + 0.2 * swell),
-                              location: 0.45),
-                        .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
-                    ],
-                    startPoint: .top, endPoint: .bottom)
+                VoiceWash(bands: bands, base: base, swell: Self.washSwell, held: held)
                     .frame(height: height)
-                    .animation(.smooth(duration: 0.12), value: swell)
-                    .animation(.smooth(duration: 0.3), value: held)
                     .allowsHitTesting(false)
                 FloatingRecordButton(onRecord: onRecord)
                     .padding(.horizontal, 20)
                     .padding(.bottom, Self.buttonBottomPadding + bottomInset)
             }
+            .animation(.smooth(duration: 0.3), value: held)
         }
     }
 
@@ -347,6 +343,66 @@ struct FloatingRecordPane: View {
         #else
         0
         #endif
+    }
+}
+
+/// The wash, drawn as a row of thin columns each with its own height and
+/// gradient: at silence a flat edge at `base`, with a voice a curve
+/// through the six meter bars up to `base + swell`. Each column's gradient
+/// runs from nothing at its own top to solid at the bottom, so the edge is
+/// soft wherever it is.
+struct VoiceWash: View {
+    var bands: [Float]
+    var base: CGFloat
+    var swell: CGFloat
+    var held: Bool
+    @Environment(\.displayScale) private var scale
+
+    /// Below this a bar is silence: the edge does not move for a breath.
+    static let floor: Float = 0.06
+    static let columns = 48
+
+    var body: some View {
+        Canvas(rendersAsynchronously: true) { context, size in
+            let stops: [Gradient.Stop] = [
+                .init(color: Accent.lime.opacity(0), location: 0),
+                .init(color: Accent.lime.opacity(held ? 0.6 : 0.35), location: 0.45),
+                .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
+            ]
+            let gradient = Gradient(stops: stops)
+            // Column edges on device pixels, no overlap: an edge between
+            // pixels is drawn twice or half and shows as a seam.
+            let edges = (0...Self.columns).map { column in
+                (size.width * CGFloat(column) / CGFloat(Self.columns) * scale).rounded() / scale
+            }
+            for column in 0..<Self.columns {
+                let x = (CGFloat(column) + 0.5) / CGFloat(Self.columns)
+                let h = min(size.height, base + swell * Self.lift(at: x, bands: bands))
+                let rect = CGRect(x: edges[column], y: size.height - h,
+                                  width: edges[column + 1] - edges[column], height: h)
+                context.fill(Path(rect),
+                             with: .linearGradient(gradient,
+                                                   startPoint: CGPoint(x: 0, y: rect.minY),
+                                                   endPoint: CGPoint(x: 0, y: rect.maxY)))
+            }
+        }
+    }
+
+    /// The edge's height at `x` in 0…1 across the width: the bars laid out
+    /// left to right, a cosine curve between neighbours, the ends held.
+    static func lift(at x: CGFloat, bands: [Float]) -> CGFloat {
+        guard !bands.isEmpty else { return 0 }
+        let count = CGFloat(bands.count)
+        let heights = bands.map { CGFloat(max(0, ($0 - floor) / (1 - floor))) }
+        // Bar centres sit at (k + 0.5) / count.
+        let position = x * count - 0.5
+        let lower = Int(position.rounded(.down))
+        let upper = lower + 1
+        if lower < 0 { return heights[0] }
+        if upper >= bands.count { return heights[bands.count - 1] }
+        let t = position - CGFloat(lower)
+        let eased = (1 - cos(t * .pi)) / 2
+        return heights[lower] + (heights[upper] - heights[lower]) * eased
     }
 }
 

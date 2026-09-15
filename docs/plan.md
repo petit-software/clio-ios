@@ -250,7 +250,12 @@ Two home layouts are kept side by side, `HomeStyle.pane` and
 one is the default for now: the list runs the full height, a capsule
 floats at the bottom, and under it a wash rises from solid colour at the
 screen edge to nothing a little above the button, with the list scrolling
-through it. Under the colour is a variable blur that comes on with it,
+through it. In hold-to-record the wash's top edge is the meter: a curve
+through the six bars across the width, drawn as pixel-aligned columns
+each with its own gradient, so a syllable lifts one side more than the
+other and the edge lies flat between words — the bars are gated in
+silence, unlike the raw level. Under the colour is a variable blur that
+comes on with it, masked by the wash so it follows the same edge,
 nothing at the top of the wash and the full radius by the button, and a
 stronger one while a held recording runs. It is BlurUIKit's
 (`TimOliver/BlurUIKit`, a package dependency, iOS only): UIKit's private
