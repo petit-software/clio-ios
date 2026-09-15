@@ -41,6 +41,12 @@ struct RecordingDetailView: View {
                 }
             }
 
+            // The player is a card of its own under the summary, in the
+            // flow of the page rather than pinned to its foot.
+            Section {
+                PlayerCard(player: player)
+            }
+
             // A plain table, the way Photos lays out a picture's metadata:
             // the labels in one column, the values in the other, one card.
             Section("Details") {
@@ -73,7 +79,6 @@ struct RecordingDetailView: View {
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
         .softScrollEdges()
-        .playerBar { PlayerBar(player: player) }
         .closeInsteadOfBack { dismiss() }
         .toolbar {
             // One menu. iOS 26 folds a second trailing item into an
@@ -289,9 +294,8 @@ struct RecordingDetailView: View {
 }
 
 private extension View {
-    /// The recording zooms out of its row, so it closes like a sheet: an
-    /// X where the stack would draw a back chevron. The zoom's own drag
-    /// still dismisses it.
+    /// An X where the stack would draw a back chevron. Hiding the back
+    /// button also loses the edge swipe; the X is the way out.
     @ViewBuilder
     func closeInsteadOfBack(_ close: @escaping () -> Void) -> some View {
         #if os(iOS)
@@ -436,44 +440,6 @@ final class AudioPlayerController {
 
 /// The player, in the bar at the bottom of the detail view: the scrubber
 /// with the times under it, and the three transport buttons.
-struct PlayerBar: View {
-    @Bindable var player: AudioPlayerController
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Slider(value: $player.currentTime, in: 0...max(player.duration, 0.01)) { editing in
-                if !editing { player.seek(to: player.currentTime) }
-            }
-            .disabled(!player.isAvailable)
-            HStack {
-                Text(Format.duration(player.currentTime)).monospacedDigit()
-                Spacer()
-                HStack(spacing: 36) {
-                    Button("Back 15 seconds", systemImage: "gobackward.15") { player.skip(-15) }
-                    Button(player.isPlaying ? "Pause" : "Play",
-                           systemImage: player.isPlaying ? "pause.fill" : "play.fill") {
-                        player.toggle()
-                    }
-                    .font(.system(size: 28))
-                    .contentTransition(.symbolEffect(.replace))
-                    Button("Forward 15 seconds", systemImage: "goforward.15") { player.skip(15) }
-                }
-                .labelStyle(.iconOnly)
-                .font(.title3)
-                .buttonStyle(.plain)
-                .disabled(!player.isAvailable)
-                Spacer()
-                Text("-" + Format.duration(max(0, player.duration - player.currentTime)))
-                    .monospacedDigit()
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-    }
-}
 
 /// A word and a symbol in a glass capsule, in the theme's inverse: white
 /// on a dark screen, near-black on a light one, so it reads as a note
@@ -521,16 +487,6 @@ private extension View {
         }
     }
 
-    /// The bar under the detail view. `safeAreaBar` on iOS 26 gets the
-    /// scroll-edge treatment; `safeAreaInset` is the same idea before it.
-    @ViewBuilder
-    func playerBar<Bar: View>(@ViewBuilder _ bar: @escaping () -> Bar) -> some View {
-        if #available(iOS 26, macOS 26, *) {
-            safeAreaBar(edge: .bottom) { bar() }
-        } else {
-            safeAreaInset(edge: .bottom) { bar().background(.bar) }
-        }
-    }
 }
 
 struct PlayerCard: View {

@@ -228,9 +228,9 @@ Five things from the todo, all on the way the app is used:
 - Settings is a list of pages, one per topic — Model, Transcription,
   Text, Recording, Intelligence, About — each row showing the value that
   matters: the active model, the language, the length cap, on or off
-- The player lives in a bar at the bottom of the detail view, scrubber
-  and times above the three transport buttons, and the transcript gets
-  the whole list
+- The player lived in a bar at the bottom of the detail view for a
+  while; it is a card of its own under the summary again, scrubber and
+  times above the three transport buttons, in the flow of the page
 - The record pane goes away while a search is in progress
 - The record screen is Scribia's recording sheet, copied and adapted: a
   medium-height sheet on the dark capture surface, a three-second
