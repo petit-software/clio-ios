@@ -41,17 +41,27 @@ targets:
       # Visible in the navigator, built through the package.
       - path: Sources/ClioMobileCore
         buildPhase: none
+      - path: Sources/ClioMobileObjC
+        buildPhase: none
+      - path: Sources/ClioMobileActivity
+        buildPhase: none
       - path: Sources/ClioMobileUI
         buildPhase: none
       - path: Tests
         buildPhase: none
       - path: docs
         buildPhase: none
+      - path: scripts
+        buildPhase: none
       - path: Package.swift
+        buildPhase: none
+      - path: Package.resolved
         buildPhase: none
       - path: project.yml
         buildPhase: none
       - path: README.md
+        buildPhase: none
+      - path: .gitignore
         buildPhase: none
     dependencies:
       - package: ClioMobile
