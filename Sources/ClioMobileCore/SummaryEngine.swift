@@ -53,7 +53,18 @@ public enum SummaryEngineError: LocalizedError, Equatable {
 /// reason rather than a crash.
 public protocol SummaryEngine: AnyObject, Sendable {
     var availability: SummaryAvailability { get async }
-    func summarize(_ transcript: String, language: String?) async throws -> TranscriptSummary
+    /// `instructions` is the system prompt — the user's, from Settings, or
+    /// `SummaryPrompt.defaultInstructions` when they have not written one.
+    func summarize(_ transcript: String, language: String?,
+                   instructions: String) async throws -> TranscriptSummary
+}
+
+public extension SummaryEngine {
+    /// The built-in instructions, for a caller with no settings to hand.
+    func summarize(_ transcript: String, language: String?) async throws -> TranscriptSummary {
+        try await summarize(transcript, language: language,
+                            instructions: SummaryPrompt.defaultInstructions)
+    }
 }
 
 /// What is sent to the model, kept in one place so the prompt is testable
@@ -89,7 +100,10 @@ public enum SummaryPrompt {
         return String(head[..<cut]) + " …"
     }
 
-    public static let instructions = """
+    /// What the model is told before it sees a transcript. The user can
+    /// write their own in Settings ▸ Intelligence; this is what they start
+    /// from and what Reset puts back.
+    public static let defaultInstructions = """
         You write titles and summaries for voice memos. You are given the \
         transcript of one recording. Write in the same language as the \
         transcript. The title is at most six words, with no quotation marks \
@@ -97,6 +111,14 @@ public enum SummaryPrompt {
         sentences saying what was said, with no preamble such as "The \
         speaker says". Do not add anything that is not in the transcript.
         """
+
+    /// The user's instructions, or the built-in ones when they have left
+    /// the field alone. Stored empty rather than as a copy of the default,
+    /// so a better default reaches anyone who has not written their own.
+    public static func instructions(_ custom: String) -> String {
+        let trimmed = custom.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? defaultInstructions : trimmed
+    }
 
     public static func prompt(for transcript: String) -> String {
         "Transcript:\n\n" + clip(transcript)
@@ -140,7 +162,13 @@ public actor StubSummaryEngine: SummaryEngine {
 
     public var availability: SummaryAvailability { available }
 
-    public func summarize(_ transcript: String, language: String?) async throws -> TranscriptSummary {
+    /// What the last call was told, so a test can check the user's own
+    /// instructions reach the model.
+    public private(set) var lastInstructions: String?
+
+    public func summarize(_ transcript: String, language: String?,
+                          instructions: String) async throws -> TranscriptSummary {
+        lastInstructions = instructions
         try await Task.sleep(for: latency)
         if let failure { throw failure }
         let words = transcript.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
@@ -163,7 +191,8 @@ public actor UnavailableSummaryEngine: SummaryEngine {
 
     public var availability: SummaryAvailability { .unavailable(reason: reason) }
 
-    public func summarize(_ transcript: String, language: String?) async throws -> TranscriptSummary {
+    public func summarize(_ transcript: String, language: String?,
+                          instructions: String) async throws -> TranscriptSummary {
         throw SummaryEngineError.unavailable(reason)
     }
 }

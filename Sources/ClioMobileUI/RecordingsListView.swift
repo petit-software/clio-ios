@@ -26,6 +26,28 @@ public enum HomeStyle: String, Sendable {
     public static let `default`: HomeStyle = .floating
 }
 
+/// What RootView needs from the library screen to draw the wash and the
+/// button above the navigation stack instead of inside it: whether that
+/// screen is the one on show, and whether the search field has it.
+/// Reported upwards because `isSearching` only exists below `searchable`.
+struct HomeChrome: Equatable, Sendable {
+    var onScreen = false
+    var searching = false
+}
+
+/// Carries `isSearching` out of the searchable view to the binding.
+private struct SearchingReporter: View {
+    @Binding var searching: Bool
+    @Environment(\.isSearching) private var isSearching
+
+    var body: some View {
+        Color.clear
+            .onChange(of: isSearching, initial: true) { _, now in
+                searching = now
+            }
+    }
+}
+
 /// The library, newest first, grouped by day. The record button sits
 /// under it so it is never more than one tap away — as a pane or floating,
 /// see `HomeStyle`; a capsule when the phone is sideways and height is
@@ -34,12 +56,37 @@ struct RecordingsListView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var query = ""
+    /// Up while the "Copied" toast is on screen.
+    @State private var copied = false
     var style: HomeStyle = .default
+    @Binding var chrome: HomeChrome
     var onRecord: () -> Void
     /// Opens Settings, for the banner when nothing is installed.
     var onSettings: () -> Void = {}
 
     var body: some View {
+        screen
+            // Above the record button, where the transcribing toast goes,
+            // so the two never sit in different places.
+            .overlay(alignment: .bottom) {
+                if copied {
+                    Toast("Copied", systemImage: "square.fill.on.square.fill")
+                        .padding(.bottom, ToastLayout.bottomInset(above: safeArea.bottom))
+                        .transition(ToastLayout.transition)
+                }
+            }
+            .animation(.smooth(duration: 0.3), value: copied)
+            // The wash and the button are drawn by RootView, over the whole
+            // navigation stack. It needs to know when this screen is the one
+            // on show — and, because a pushed detail's arrival is what takes
+            // them away, `onDisappear` is late by a push, which is exactly
+            // right: they are covered by then.
+            .onAppear { chrome.onScreen = true }
+            .onDisappear { chrome.onScreen = false }
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         if model.library.recordings.isEmpty {
             layout
         } else {
@@ -67,6 +114,20 @@ struct RecordingsListView: View {
     /// the empty message, the wash, the settings button in the bar, and
     /// the record button. With no model to transcribe with either, the
     /// first thing to do is download one, and the record button goes too.
+    /// One at a time: a second copy restarts the toast rather than
+    /// letting the first one take it away early.
+    @State private var copyDismissal: Task<Void, Never>?
+
+    private func showCopied() {
+        copied = true
+        copyDismissal?.cancel()
+        copyDismissal = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            copied = false
+        }
+    }
+
     private var needsModelFirst: Bool {
         model.library.recordings.isEmpty && model.models.installed.isEmpty
     }
@@ -98,14 +159,12 @@ struct RecordingsListView: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    /// A held recording is running: the list fades and shrinks away and
-    /// the clock takes the middle of the screen.
-    private var held: Bool {
-        model.settings.settings.holdToRecord && model.capture.state.isCapturing
-    }
-
     /// The list scrolls under a green wash that rises from the bottom edge
-    /// and is gone a little above the button; the button floats on it.
+    /// and is gone a little above the button; the button floats on it. Only
+    /// the list is here: the wash, the button and the clock are drawn by
+    /// RootView over the whole navigation stack, because while a held
+    /// recording runs the stack goes back as one layer — bar, title, search
+    /// and rows together — and they have to stay out of it.
     private var floating: some View {
         content
             // Room at the end of the list for the last row to scroll clear
@@ -114,23 +173,6 @@ struct RecordingsListView: View {
             .contentMargins(.bottom, FloatingRecordPane.buttonHeight
                                      + FloatingRecordPane.buttonBottomPadding
                                      + 16 + bottomInset, for: .scrollContent)
-            .opacity(held ? 0 : 1)
-            .scaleEffect(held ? 0.92 : 1)
-            .overlay {
-                if held {
-                    Text(Format.duration(model.capture.elapsed))
-                        .font(.system(size: 76, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .transition(.opacity.combined(with: .scale(scale: 1.08)))
-                        .accessibilityLabel("Recording, \(Format.duration(model.capture.elapsed))")
-                }
-            }
-            .barHidden(held)
-            .animation(.smooth(duration: 0.35), value: held)
-            .overlay(alignment: .bottom) {
-                FloatingRecordPane(onRecord: onRecord, showsButton: !needsModelFirst)
-            }
             .ignoresSafeArea(edges: .bottom)
     }
 
@@ -185,6 +227,7 @@ struct RecordingsListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { SearchingReporter(searching: $chrome.searching) }
     }
 
     private var list: some View {
@@ -195,7 +238,7 @@ struct RecordingsListView: View {
             ForEach(sections, id: \.day) { section in
                 Section(section.day) {
                     ForEach(section.recordings) { recording in
-                        RecordingRow(recording: recording)
+                        RecordingRow(recording: recording) { showCopied() }
                             // The link is behind the row, not around it,
                             // so the list draws no chevron: the length
                             // pill has the right edge.
@@ -265,6 +308,10 @@ struct RecordingsListView: View {
 /// detail view; the row does not repeat it.
 struct RecordingRow: View {
     let recording: Recording
+    /// Copying from the row, so a transcript can be had without opening
+    /// it. The toast belongs to the screen, not the row, so the row only
+    /// says it happened.
+    var onCopy: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -301,6 +348,23 @@ struct RecordingRow: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .pillGlass()
+            // Outside the pill, on the row's trailing edge: a transcript is
+            // one tap away without opening the recording. Left out when
+            // there is none to take — pending, failed, nothing heard.
+            if !recording.transcript.isEmpty {
+                Button("Copy Transcript", systemImage: "square.fill.on.square.fill") {
+                    Clipboard.copy(recording.transcript)
+                    onCopy()
+                }
+                .labelStyle(.iconOnly)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                // Plain and shaped: in a list a bordered button takes the
+                // whole row with it, and the row is the link to the
+                // recording.
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+            }
         }
         .padding(.vertical, 2)
     }
@@ -317,17 +381,6 @@ struct RecordingRow: View {
 }
 
 private extension View {
-    /// The navigation bar — title, search, the settings button — gone or
-    /// back; nothing on the host build.
-    @ViewBuilder
-    func barHidden(_ hidden: Bool) -> some View {
-        #if os(iOS)
-        toolbar(hidden ? .hidden : .visible, for: .navigationBar)
-        #else
-        self
-        #endif
-    }
-
     /// The bar over a scrolled list stays translucent and fades into the
     /// rows, with no hairline where the two meet. Before iOS 26 the bar's
     /// own blur applies, which draws its usual line.
@@ -359,8 +412,10 @@ struct FloatingRecordPane: View {
     /// Off, the wash stays and the button is left out: the screen has
     /// nothing to record with yet.
     var showsButton = true
+    /// Passed in, not read: the pane is drawn above the navigation stack,
+    /// where `isSearching` is always false.
+    var searching = false
     @Environment(AppModel.self) private var model
-    @Environment(\.isSearching) private var isSearching
     @Environment(\.safeAreaInsets) private var safeArea
 
     /// How far above the button the wash reaches before it is gone.
@@ -376,7 +431,7 @@ struct FloatingRecordPane: View {
     static let washSwell: CGFloat = 150
 
     var body: some View {
-        if !isSearching {
+        if !searching {
             let capture = model.capture
             let held = model.settings.settings.holdToRecord && capture.state.isCapturing
             // While a held recording runs the wash steps up and brightens,
@@ -643,7 +698,7 @@ struct FloatingRecordButton: View {
         switch capture.state {
         case .starting: return "Starting…"
         case .recording, .interrupted, .paused: return "Recording"
-        case .transcribing, .idle, .failed: return "Press and hold to record"
+        case .transcribing, .idle, .failed: return "Hold to Record"
         }
     }
 

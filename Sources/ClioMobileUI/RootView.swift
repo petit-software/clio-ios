@@ -21,6 +21,9 @@ public struct RootView: View {
     @State private var showingIntro = false
     @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
+    /// What the library screen reports back: whether it is the one on show,
+    /// and whether the search field has it.
+    @State private var chrome = HomeChrome()
     /// The recording whose transcript went to the clipboard on landing.
     @State private var autoCopied: Recording.ID?
     private let initialScreen: InitialScreen
@@ -41,7 +44,31 @@ public struct RootView: View {
     public var body: some View {
         GeometryReader { proxy in
             stack
-                .environment(\.safeAreaInsets, proxy.safeAreaInsets)
+                // One layer, not two: the effect sits on the whole stack so
+                // the bar, the title, the search field and the rows go back
+                // together. Which is why the wash, the button and the clock
+                // are here rather than in the list — they have to stay put
+                // while everything behind them recedes.
+                .receded(held)
+                .overlay {
+                    if held {
+                        Text(Format.duration(model.capture.elapsed))
+                            .font(.system(size: 76, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .transition(.opacity.combined(with: .scale(scale: 1.08)))
+                            .accessibilityLabel("Recording, \(Format.duration(model.capture.elapsed))")
+                    }
+                }
+                .animation(.smooth(duration: 0.35), value: held)
+                .overlay(alignment: .bottom) {
+                    if homeStyle == .floating && chrome.onScreen {
+                        FloatingRecordPane(onRecord: { showingRecorder = true },
+                                           showsButton: !needsModelFirst,
+                                           searching: chrome.searching)
+                            .ignoresSafeArea(edges: .bottom)
+                    }
+                }
                 // Between Stop and the recording opening: the sheet is gone,
                 // the hold button has been let go of, and this says what
                 // the wait is. The same pill either way, at the bottom,
@@ -54,12 +81,30 @@ public struct RootView: View {
                     }
                 }
                 .animation(.smooth(duration: 0.3), value: model.capture.state == .transcribing)
+                // Outermost, so the wash and the button read it too.
+                .environment(\.safeAreaInsets, proxy.safeAreaInsets)
         }
+    }
+
+    /// A held recording is running on the library screen: everything behind
+    /// the button goes back and the clock takes the middle.
+    private var held: Bool {
+        homeStyle == .floating
+            && chrome.onScreen
+            && model.settings.settings.holdToRecord
+            && model.capture.state.isCapturing
+    }
+
+    /// Nothing installed and nothing recorded: the button is left out, and
+    /// the wash stays on its own.
+    private var needsModelFirst: Bool {
+        model.library.recordings.isEmpty && model.models.installed.isEmpty
     }
 
     private var stack: some View {
         NavigationStack(path: $path) {
             RecordingsListView(style: homeStyle,
+                               chrome: $chrome,
                                onRecord: { showingRecorder = true },
                                onSettings: { showingSettings = true })
                 .navigationDestination(for: Recording.ID.self) { id in
@@ -67,7 +112,7 @@ public struct RootView: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Settings", systemImage: "gearshape") {
+                        Button("Settings", systemImage: "ellipsis") {
                             showingSettings = true
                         }
                     }
@@ -134,6 +179,17 @@ public struct RootView: View {
     }
 }
 
+private extension View {
+    /// Back and away: smaller, blurred and gone, one animation over one
+    /// layer, rather than a bar leaving on its own while the list shrinks.
+    func receded(_ receded: Bool) -> some View {
+        scaleEffect(receded ? 0.9 : 1)
+            .blur(radius: receded ? 16 : 0)
+            .opacity(receded ? 0 : 1)
+            .allowsHitTesting(!receded)
+    }
+}
+
 #Preview("Library") {
     RootView().environment(AppModel.simulating())
 }
@@ -146,13 +202,17 @@ public struct RootView: View {
 /// Debug switches, read from the environment at launch, so any screen can
 /// be put on a simulator without tapping through to it:
 ///
-///     xcrun simctl launch --terminate-running-process <udid> com.bartbak.clio.ios \
-///         -e CLIO_SIMULATE=1 -e CLIO_SHOW=detail
+///     SIMCTL_CHILD_CLIO_SIMULATE=1 SIMCTL_CHILD_CLIO_SHOW=detail \
+///         xcrun simctl launch --terminate-running-process <udid> com.bartbak.clio.ios
+///
+/// `simctl launch` has no `-e`: anything after the bundle id is argv, and
+/// the prefix is how the environment reaches the app.
 ///
 /// `CLIO_SIMULATE=1` runs the app on simulated dependencies — fixed
 /// recordings with synthesized audio in a temporary folder, a fake
 /// microphone, the stub engine, nothing else on disk — and `CLIO_SHOW` is
-/// one of `record`, `settings`, `detail`. `CLIO_AUTOPLAY=1` starts playback
+/// one of `record`, `settings`, `detail`. `CLIO_HOLD=1` turns on hold to
+/// record. `CLIO_AUTOPLAY=1` starts playback
 /// when the detail view appears, so the seek highlight can be seen without
 /// a tap. The Mac app has the same kind of switches for its overlay and
 /// settings, for the same reason: a screen nobody has looked at is a
@@ -175,6 +235,10 @@ public enum LaunchOptions {
         // Seen already, unless the intro is the screen being looked at.
         var settings = Settings()
         settings.introShown = environment["CLIO_SHOW"] != "intro"
+        // `CLIO_HOLD=1` starts with "Hold to record" on, so the held
+        // recording — the screen receding, the clock, the wash at full
+        // height — can be reached without a trip through Settings.
+        settings.holdToRecord = environment["CLIO_HOLD"] == "1"
         return AppModel.simulating(
             recordings: empty || mic ? [] : PreviewData.recordings,
             // The audio store is a real folder, so a real recording's WAV

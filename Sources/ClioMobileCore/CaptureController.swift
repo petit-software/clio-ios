@@ -84,6 +84,9 @@ public final class CaptureController {
     /// thrown away rather than saved as "nothing heard". Hold to record
     /// asks for this — a brush of the button must not leave a row behind.
     private var discardSilence = false
+    /// Between the lift and the verdict: the state is still a capturing one
+    /// and must not take a second stop.
+    private var stopping = false
 
     public init(recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
@@ -225,9 +228,14 @@ public final class CaptureController {
     }
 
     public func stop() async {
-        guard state.isCapturing else { return }
+        guard state.isCapturing, !stopping else { return }
+        stopping = true
+        defer { stopping = false }
         stopPolling()
-        state = .transcribing
+        // Not `.transcribing` yet: `finish` looks at what was captured
+        // first, and a capture with nothing in it never gets that far. The
+        // flag is what keeps a second stop out in the meantime, since the
+        // state is still a capturing one until the recorder has answered.
         let result = await recorder.stop()
         elapsed = result.duration
         await finish(result)
@@ -260,6 +268,27 @@ public final class CaptureController {
     // MARK: Transcribe
 
     private func finish(_ result: CaptureResult) async {
+        let current = settings.settings
+        // Is there a word in this at all? Answered from the samples, with
+        // nothing loaded and nothing written — see `SilenceGate`. Hold to
+        // record runs the voice gate whether or not trimming is on: what is
+        // being caught is an accident, not a long pause.
+        let verdict = SilenceGate.verdict(
+            for: result.samples,
+            sensitivity: current.vadSensitivity,
+            usingVoiceActivity: current.voiceActivityDetection || discardSilence)
+
+        // Nothing in it, and it was a held recording: gone as if it never
+        // happened. No file, no row, and the app never said "Transcribing".
+        if discardSilence, !verdict.isSpeech {
+            state = .idle
+            return
+        }
+
+        // There is something to transcribe. Say so now rather than after
+        // the file is written: a long recording takes a moment to land.
+        if verdict.isSpeech { state = .transcribing }
+
         let id = UUID()
         let audioURL = library.newAudioURL(for: id)
 
@@ -280,14 +309,13 @@ public final class CaptureController {
         recording.location = await locationTask?.value
         locationTask = nil
 
-        guard !result.samples.isEmpty else {
+        // Nothing in it, but this was a tap: the audio was asked for, so the
+        // row lands as "Nothing was heard" without the model being woken
+        // for it. Transcribe Again is there if the gate got it wrong.
+        guard verdict.isSpeech else {
             recording.status = .nothingHeard
-            if discardSilence {
-                discard(audioURL)
-            } else {
-                library.add(recording)
-                lastRecordingID = id
-            }
+            library.add(recording)
+            lastRecordingID = id
             state = .idle
             return
         }

@@ -48,6 +48,11 @@ public struct Settings: Codable, Equatable, Sendable {
     /// Titles and summaries from the on-device language model, when the
     /// phone has one. Off does nothing; on does nothing until M3.
     public var generateSummaries: Bool = true
+    /// What the language model is told before it is shown a transcript.
+    /// Empty means the built-in instructions — see `SummaryPrompt` — kept
+    /// empty rather than filled with a copy of them, so a better default
+    /// reaches anyone who has not written their own.
+    public var summaryInstructions: String = ""
 
     public init() {}
 
@@ -97,6 +102,7 @@ public struct Settings: Codable, Equatable, Sendable {
                                      defaults.capitalizeFirstLetter)
 
         generateSummaries = read(.generateSummaries, defaults.generateSummaries)
+        summaryInstructions = read(.summaryInstructions, defaults.summaryInstructions)
     }
 }
 

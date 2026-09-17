@@ -27,6 +27,13 @@ struct SummaryPromptTests {
         #expect(SummaryPrompt.clip("short") == "short")
     }
 
+    @Test("An empty setting means the built-in instructions")
+    func instructionsFallBack() {
+        #expect(SummaryPrompt.instructions("") == SummaryPrompt.defaultInstructions)
+        #expect(SummaryPrompt.instructions("   \n  ") == SummaryPrompt.defaultInstructions)
+        #expect(SummaryPrompt.instructions("Answer in Dutch.") == "Answer in Dutch.")
+    }
+
     @Test("Titles lose their quotes and full stop")
     func cleanTitle() {
         #expect(SummaryPrompt.cleanTitle("“Dentist and the invoice.”") == "Dentist and the invoice")
@@ -99,6 +106,27 @@ struct IntelligenceTests {
         #expect(updated.summary?.contains("of en summarised") == true)
         #expect(updated.displayTitle == "[Stub] The migration ran")
         #expect(controller.isSummarizing(recording.id) == false)
+    }
+
+    @Test("The instructions from Settings are what the model is given")
+    @MainActor
+    func ownInstructionsReachTheModel() async throws {
+        let recording = Recording(duration: 30, transcript: longTranscript, language: "en")
+
+        // Nothing written: the built-in instructions.
+        let stock = StubSummaryEngine(latency: .milliseconds(10))
+        let (plain, _) = await make(engine: stock, recordings: [recording])
+        await plain.summarize(recording.id).value
+        #expect(await stock.lastInstructions == SummaryPrompt.defaultInstructions)
+
+        // The user's own, instead of them.
+        var settings = Settings()
+        settings.summaryInstructions = "Answer in Dutch, in one sentence."
+        let engine = StubSummaryEngine(latency: .milliseconds(10))
+        let (controller, _) = await make(settings: settings, engine: engine,
+                                         recordings: [recording])
+        await controller.summarize(recording.id).value
+        #expect(await engine.lastInstructions == "Answer in Dutch, in one sentence.")
     }
 
     @Test("A short transcript is left alone")

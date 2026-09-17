@@ -251,7 +251,11 @@ struct CaptureTests {
         var settings = Settings()
         settings.voiceActivityDetection = false
         let recorder = SimulatedRecorder()
-        recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+        // The tone, not digital silence: a clip with no signal in it never
+        // reaches the engine now, whatever trimming is set to — see
+        // `silenceNeverReachesTheEngine`. What this checks is that with
+        // trimming off nothing is cut off the ends.
+        recorder.simulatedElapsed = 3
         let (controller, library, directory) = try makeController(recorder: recorder, settings: settings)
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -260,6 +264,81 @@ struct CaptureTests {
         let recording = try #require(library.recordings.first)
         #expect(recording.status == .transcribed)
         #expect(recording.transcript.contains("48000 samples"))
+    }
+
+    @Test("A clip with no signal in it never reaches the engine, trimming or not")
+    @MainActor
+    func silenceNeverReachesTheEngine() async throws {
+        for trimming in [true, false] {
+            var settings = Settings()
+            settings.voiceActivityDetection = trimming
+            let recorder = SimulatedRecorder()
+            recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+            let (controller, library, directory) =
+                try makeController(recorder: recorder, settings: settings)
+            defer { try? FileManager.default.removeItem(at: directory) }
+
+            await controller.start()
+            await controller.stop()
+            let recording = try #require(library.recordings.first)
+            #expect(recording.status == .nothingHeard,
+                    "trimming \(trimming ? "on" : "off")")
+            #expect(recording.transcript.isEmpty)
+        }
+    }
+
+    @Test("A press too short to hold a word leaves nothing behind")
+    @MainActor
+    func brushOfTheButtonIsDiscarded() async throws {
+        let recorder = SimulatedRecorder()
+        // Loud, and real speech if it were longer — but a fifth of a second
+        // of it, which is what a button brushed in a pocket gives back.
+        recorder.samples = (0..<Int(0.2 * AudioRecorder.sampleRate)).map { i in
+            0.3 * sin(2 * .pi * 440 * Float(i) / Float(AudioRecorder.sampleRate))
+        }
+        let (controller, library, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start(discardingSilence: true)
+        await controller.stop()
+        #expect(library.recordings.isEmpty)
+        #expect(controller.lastRecordingID == nil)
+        #expect(controller.state == .idle)
+    }
+
+    @Test("The app never says it is transcribing a capture it is about to throw away")
+    @MainActor
+    func silentHoldNeverSaysTranscribing() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.samples = [Float](repeating: 0, count: Int(3 * AudioRecorder.sampleRate))
+        let (controller, _, directory) = try makeController(recorder: recorder)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        // Every state the controller passes through, not only where it
+        // lands: "Transcribing" showing for a frame is the bug.
+        let seen = StateLog()
+        seen.follow(controller)
+        await controller.start(discardingSilence: true)
+        await controller.stop()
+
+        #expect(seen.states.contains(.recording), "the log is following")
+        #expect(!seen.states.contains(.transcribing))
+        #expect(controller.state == .idle)
+    }
+
+    /// Records every value `state` takes, by re-arming observation from
+    /// inside the change handler.
+    @MainActor
+    final class StateLog {
+        private(set) var states: [CaptureState] = []
+
+        func follow(_ controller: CaptureController) {
+            withObservationTracking {
+                states.append(controller.state)
+            } onChange: {
+                Task { @MainActor [weak self] in self?.follow(controller) }
+            }
+        }
     }
 
     @Test("Keep in memory off unloads the model after each transcription")

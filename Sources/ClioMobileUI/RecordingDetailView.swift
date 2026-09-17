@@ -89,7 +89,6 @@ struct RecordingDetailView: View {
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
         .softScrollEdges()
-        .closeInsteadOfBack { dismiss() }
         .toolbar {
             // One menu. iOS 26 folds a second trailing item into an
             // overflow menu of its own anyway, so a separate share button
@@ -297,22 +296,6 @@ struct RecordingDetailView: View {
 }
 
 private extension View {
-    /// An X where the stack would draw a back chevron. Hiding the back
-    /// button also loses the edge swipe; the X is the way out.
-    @ViewBuilder
-    func closeInsteadOfBack(_ close: @escaping () -> Void) -> some View {
-        #if os(iOS)
-        navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark", action: close)
-                }
-            }
-        #else
-        self
-        #endif
-    }
-
     @ViewBuilder
     func navigationBarTitleDisplayModeInline() -> some View {
         #if os(iOS)
@@ -527,7 +510,7 @@ struct PlayerCard: View {
             }
 
             Button(player.isPlaying ? "Pause" : "Play",
-                   systemImage: player.isPlaying ? "pause.fill" : "play.fill") {
+                   systemImage: player.isPlaying ? "pause.circle.fill" : "play.circle.fill") {
                 player.toggle()
             }
             .labelStyle(.iconOnly)

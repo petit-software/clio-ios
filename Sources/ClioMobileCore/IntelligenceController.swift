@@ -81,8 +81,10 @@ public final class IntelligenceController {
         failures[id] = nil
 
         do {
-            let result = try await engine.summarize(recording.transcript,
-                                                    language: recording.language)
+            let result = try await engine.summarize(
+                recording.transcript,
+                language: recording.language,
+                instructions: SummaryPrompt.instructions(settings.settings.summaryInstructions))
             // Re-read: the user may have renamed or deleted it meanwhile.
             guard !Task.isCancelled, var current = library[id] else { return }
             current.generatedTitle = result.title.isEmpty ? nil : result.title

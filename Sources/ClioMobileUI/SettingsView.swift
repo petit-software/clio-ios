@@ -253,6 +253,16 @@ struct SettingsView: View {
             Toggle("Titles and summaries", isOn: Binding(
                 get: { store.settings.generateSummaries },
                 set: { store.settings.generateSummaries = $0 }))
+            if availability.isAvailable {
+                NavigationLink {
+                    SummaryInstructionsEditor()
+                } label: {
+                    LabeledContent("Instructions",
+                                   value: store.settings.summaryInstructions
+                                       .trimmingCharacters(in: .whitespacesAndNewlines)
+                                       .isEmpty ? "Default" : "Custom")
+                }
+            }
             if let reason = availability.reason {
                 Label(reason, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
@@ -373,6 +383,72 @@ struct VocabularyEditor: View {
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
         }
+    }
+}
+
+// MARK: - Summary instructions
+
+/// The system prompt the on-device model is given before it is shown a
+/// transcript.
+///
+/// Editable because what a good summary is depends on what the recordings
+/// are: a standup note and a interview want different answers. Stored empty
+/// while it matches the built-in text, so improving that default reaches
+/// anyone who has not written their own — which is why Reset clears the
+/// field rather than pasting the default into it.
+struct SummaryInstructionsEditor: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var loaded = false
+
+    var body: some View {
+        Form {
+            Section {
+                TextEditor(text: $text)
+                    .font(.body.monospaced())
+                    // Tall enough that the built-in instructions are on
+                    // screen whole: a prompt read half at a time is a
+                    // prompt nobody edits.
+                    .frame(minHeight: 340)
+                    .autocorrectionDisabled()
+            } footer: {
+                Text("What the model is told before it is shown a transcript. "
+                     + "It answers with a title and a summary either way; this "
+                     + "is what shapes them.")
+            }
+            Section {
+                Button("Reset to Default") {
+                    text = SummaryPrompt.defaultInstructions
+                    model.settings.settings.summaryInstructions = ""
+                }
+                .disabled(isDefault)
+            } footer: {
+                Text(isDefault
+                     ? "These are the built-in instructions. Edit them and yours "
+                       + "are used instead."
+                     : "Yours are used. Reset puts the built-in instructions back.")
+            }
+        }
+        .navigationTitle("Instructions")
+        .onAppear {
+            text = SummaryPrompt.instructions(model.settings.settings.summaryInstructions)
+            loaded = true
+        }
+        .onChange(of: text) { _, newValue in
+            // Not while the field is being filled in on appear: that would
+            // write the default back as if the user had typed it.
+            guard loaded else { return }
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            model.settings.settings.summaryInstructions =
+                trimmed == SummaryPrompt.defaultInstructions ? "" : newValue
+        }
+    }
+
+    /// Nothing of the user's own stored: the field still shows the built-in
+    /// text, which is what they would be editing.
+    private var isDefault: Bool {
+        model.settings.settings.summaryInstructions
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

@@ -45,7 +45,8 @@ public actor FoundationModelsSummarizer: SummaryEngine {
         }
     }
 
-    public func summarize(_ transcript: String, language: String?) async throws -> TranscriptSummary {
+    public func summarize(_ transcript: String, language: String?,
+                          instructions: String) async throws -> TranscriptSummary {
         let model = SystemLanguageModel.default
         if case .unavailable(let reason) = model.availability {
             throw SummaryEngineError.unavailable(Self.describe(reason))
@@ -56,7 +57,7 @@ public actor FoundationModelsSummarizer: SummaryEngine {
             throw SummaryEngineError.unsupportedLanguage(TranscriptionLanguage.name(for: language))
         }
 
-        let session = LanguageModelSession(model: model, instructions: SummaryPrompt.instructions)
+        let session = LanguageModelSession(model: model, instructions: instructions)
         let draft: Draft
         do {
             let response = try await session.respond(
