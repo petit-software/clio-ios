@@ -13,7 +13,8 @@ enum SettingsPage: Hashable {
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmingDeleteAll = false
+    /// Which minus was pressed; nil is no alert up.
+    @State private var deleting: DeleteScope?
     /// A model that would not delete, shown once and dismissed.
     @State private var deleteError: String?
     /// The stack starts here, so opening on the Model page lands there
@@ -90,9 +91,14 @@ struct SettingsView: View {
                          + "on the phone.")
                 }
                 Section {
-                    page("About", value: Self.version) {
-                        aboutSection
+                    page("Storage", value: Format.bytes(onThisPhone)) {
+                        storageSection
                     }
+                } footer: {
+                    Text("What Clio is keeping on this phone, and how to remove it.")
+                }
+                Section {
+                    LabeledContent("Version", value: Self.version)
                     Link(destination: Self.macApp) {
                         HStack {
                             Text("Get Clio for macOS")
@@ -301,44 +307,37 @@ struct SettingsView: View {
         }
     }
 
-    private var aboutSection: some View {
+    /// What is on disk and how to get rid of it. Its own page: deleting
+    /// every recording is not a thing anybody goes to About looking for,
+    /// and neither are the sizes it used to sit under.
+    private var storageSection: some View {
         Section {
-            LabeledContent("Version", value: Self.version)
-            LabeledContent("Recordings",
-                           value: "\(model.library.recordings.count) · \(Format.bytes(model.library.audioBytes))")
-            LabeledContent("Models",
-                           value: "\(model.models.installed.count) · \(Format.bytes(model.models.installedBytes))")
-            LabeledContent("On this phone",
-                           value: Format.bytes(model.library.audioBytes + model.models.installedBytes))
+            storageRow(.recordings,
+                       "\(model.library.recordings.count) · \(Format.bytes(model.library.audioBytes))",
+                       enabled: !model.library.recordings.isEmpty)
+            storageRow(.models,
+                       "\(model.models.installed.count) · \(Format.bytes(model.models.installedBytes))",
+                       enabled: !model.models.installed.isEmpty)
+            storageRow(.everything, Format.bytes(onThisPhone), enabled: !nothingToDelete)
             if let error = model.settings.lastSaveError ?? model.library.lastSaveError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
                     .font(.footnote)
             }
-            Button("Delete…", role: .destructive) {
-                confirmingDeleteAll = true
-            }
-            .disabled(nothingToDelete)
+        } header: {
+            Text("Usage")
         } footer: {
-            Text("Everything Clio records and transcribes stays on this phone.")
+            Text("Everything Clio records and transcribes stays on this phone. "
+                 + "The minus on a row removes what that row counts; your settings "
+                 + "are kept whichever one you use.")
         }
-        // A sheet rather than an alert: there is a choice to make before
-        // there is anything to confirm, and the two destructive rows are
-        // the confirmation.
-        .confirmationDialog("What should Clio delete?", isPresented: $confirmingDeleteAll,
-                            titleVisibility: .visible) {
-            Button("Delete Recordings", role: .destructive) {
-                model.library.deleteAll()
-            }
-            .disabled(model.library.recordings.isEmpty)
-            Button("Delete Everything", role: .destructive) {
-                model.library.deleteAll()
-                deleteInstalledModels()
-            }
-        } message: {
-            Text("Recordings are the audio and the transcripts. Everything is those "
-                 + "and the downloaded models too — \(Format.bytes(onThisPhone)) in all. "
-                 + "Your settings are kept either way, and neither can be undone.")
+        // One plain alert, whatever the row: the row has already said what
+        // is going, so there is a single thing to say yes or no to.
+        .alert(deleting?.prompt ?? "", isPresented: deletingIsPresented, presenting: deleting) { scope in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) { delete(scope) }
+        } message: { scope in
+            Text(scope.message(size: Format.bytes(size(of: scope))))
         }
         .alert("Not everything could be deleted",
                isPresented: .constant(deleteError != nil)) {
@@ -346,6 +345,91 @@ struct SettingsView: View {
         } message: {
             Text(deleteError ?? "")
         }
+    }
+
+    /// A count on the left, its size on the right, and a minus that takes
+    /// it away — the copy button's shape, in the place the eye already
+    /// goes for a value.
+    private func storageRow(_ scope: DeleteScope, _ value: String,
+                            enabled: Bool) -> some View {
+        HStack {
+            Text(scope.title)
+            Spacer(minLength: 12)
+            Text(value)
+                .foregroundStyle(.secondary)
+            Button(scope.prompt, systemImage: "minus.circle.fill") {
+                deleting = scope
+            }
+            .labelStyle(.iconOnly)
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.25)
+        }
+    }
+
+    /// What a minus takes away. Three scopes, one per row, rather than one
+    /// button and a sheet asking which — the row is the answer.
+    enum DeleteScope: Identifiable {
+        case recordings, models, everything
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .recordings: "Recordings"
+            case .models: "Models"
+            case .everything: "Everything"
+            }
+        }
+
+        var prompt: String {
+            switch self {
+            case .recordings: "Delete every recording?"
+            case .models: "Delete the downloaded models?"
+            case .everything: "Delete everything on this phone?"
+            }
+        }
+
+        func message(size: String) -> String {
+            switch self {
+            case .recordings:
+                "The audio and the transcripts, \(size) in all. This cannot be undone."
+            case .models:
+                "\(size) of downloaded models. Nothing is transcribed until one is "
+                + "downloaded again; your recordings are kept."
+            case .everything:
+                "Every recording and every downloaded model, \(size) in all. Your "
+                + "settings are kept. This cannot be undone."
+            }
+        }
+    }
+
+    private var deletingIsPresented: Binding<Bool> {
+        Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+    }
+
+    private func size(of scope: DeleteScope) -> Int64 {
+        switch scope {
+        case .recordings: model.library.audioBytes
+        case .models: model.models.installedBytes
+        case .everything: onThisPhone
+        }
+    }
+
+    private func delete(_ scope: DeleteScope) {
+        switch scope {
+        case .recordings:
+            model.library.deleteAll()
+        case .models:
+            deleteInstalledModels()
+        case .everything:
+            model.library.deleteAll()
+            deleteInstalledModels()
+        }
+        deleting = nil
     }
 
     private var onThisPhone: Int64 {

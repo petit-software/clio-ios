@@ -127,9 +127,13 @@ struct RecordingDetailView: View {
                 }
             }
         }
-        .confirmationDialog("Delete this recording?", isPresented: $confirmingDelete,
-                            titleVisibility: .visible) {
-            Button("Delete Recording", role: .destructive) {
+        // An alert, not a confirmation dialog: there is one thing to say
+        // yes or no to, and a dialog anchors itself to the menu it came
+        // from — a popover with a tail pointing at a button that is no
+        // longer there.
+        .alert("Delete this recording?", isPresented: $confirmingDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
                 player.stop()
                 model.library.delete(id)
                 dismiss()
