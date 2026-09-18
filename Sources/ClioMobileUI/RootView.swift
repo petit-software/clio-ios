@@ -16,7 +16,11 @@ public enum InitialScreen: Equatable, Sendable {
 public struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var path: [Recording.ID] = []
-    @State private var showingSettings = false
+    /// The Settings sheet, and the page it opens on. By item rather than a
+    /// Bool and a separate page: `sheet(isPresented:)` evaluates its
+    /// content against state as it was when the sheet went up, and the
+    /// page was still nil then — every route landed on the Settings list.
+    @State private var settingsSheet: SettingsSheet?
     @State private var showingRecorder = false
     @State private var showingIntro = false
     @State private var recorderDetent: PresentationDetent = .medium
@@ -36,7 +40,7 @@ public struct RootView: View {
         case .library: break
         case .record: _showingRecorder = State(initialValue: true)
         case .intro: _showingIntro = State(initialValue: true)
-        case .settings: _showingSettings = State(initialValue: true)
+        case .settings: _settingsSheet = State(initialValue: SettingsSheet(page: nil))
         case .detail(let id): _path = State(initialValue: [id])
         }
     }
@@ -62,7 +66,7 @@ public struct RootView: View {
                 }
                 .animation(.smooth(duration: 0.35), value: held)
                 .overlay(alignment: .bottom) {
-                    if homeStyle == .floating && chrome.onScreen {
+                    if homeStyle == .floating && chrome.onScreen && !chrome.selecting {
                         FloatingRecordPane(onRecord: { showingRecorder = true },
                                            showsButton: !needsModelFirst,
                                            searching: chrome.searching)
@@ -91,6 +95,7 @@ public struct RootView: View {
     private var held: Bool {
         homeStyle == .floating
             && chrome.onScreen
+            && !chrome.selecting
             && model.settings.settings.holdToRecord
             && model.capture.state.isCapturing
     }
@@ -106,20 +111,25 @@ public struct RootView: View {
             RecordingsListView(style: homeStyle,
                                chrome: $chrome,
                                onRecord: { showingRecorder = true },
-                               onSettings: { showingSettings = true })
+                               onSettings: { settingsSheet = SettingsSheet(page: $0) })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id, copiedOnArrival: autoCopied == id)
                 }
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Settings", systemImage: "ellipsis") {
-                            showingSettings = true
+                    // Out of the way while rows are being picked: Done has
+                    // that end of the bar, and Settings is not what anyone
+                    // is reaching for mid-selection.
+                    if !chrome.selecting {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Settings", systemImage: "ellipsis") {
+                                settingsSheet = SettingsSheet(page: nil)
+                            }
                         }
                     }
                 }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
+        .sheet(item: $settingsSheet) { sheet in
+            SettingsView(initialPage: sheet.page)
         }
         // The first run, and again from Settings ▸ Developer.
         .sheet(isPresented: $showingIntro, onDismiss: { model.settings.settings.introShown = true }) {
@@ -153,7 +163,7 @@ public struct RootView: View {
                 autoCopied = nil
             }
             showingRecorder = false
-            showingSettings = false
+            settingsSheet = nil
             path = [id]
         }
         .onChange(of: model.capture.state, initial: true) { _, state in
@@ -164,14 +174,14 @@ public struct RootView: View {
             AppActions.shared.pending = nil
             switch action {
             case .showIntro:
-                showingSettings = false
+                settingsSheet = nil
                 // The Settings sheet has to be down before another goes up.
                 Task {
                     try? await Task.sleep(for: .milliseconds(450))
                     showingIntro = true
                 }
             case .record:
-                showingSettings = false
+                settingsSheet = nil
                 path = []
                 showingRecorder = true
             }
@@ -188,6 +198,12 @@ private extension View {
             .opacity(receded ? 0 : 1)
             .allowsHitTesting(!receded)
     }
+}
+
+/// Which Settings sheet is up: the list, or one of its pages directly.
+private struct SettingsSheet: Identifiable {
+    var page: SettingsPage?
+    var id: String { page.map(String.init(describing:)) ?? "settings" }
 }
 
 #Preview("Library") {

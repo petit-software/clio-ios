@@ -1,6 +1,12 @@
 import ClioMobileCore
 import SwiftUI
 
+/// A page of Settings something elsewhere in the app can send the user
+/// straight to, rather than to the list and a hunt for the row.
+enum SettingsPage: Hashable {
+    case model
+}
+
 /// Settings: a list of pages, one per topic, each row showing the value
 /// that matters. Every control binds straight to the one `Settings`
 /// struct; the store debounces the writes.
@@ -8,10 +14,19 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDeleteAll = false
+    /// The stack starts here, so opening on the Model page lands there
+    /// rather than sliding there after the sheet is up — and Back still
+    /// goes to Settings itself. A `navigationDestination(isPresented:)`
+    /// that starts true does not push at all; the path does.
+    @State private var path: [SettingsPage]
+
+    init(initialPage: SettingsPage? = nil) {
+        _path = State(initialValue: initialPage.map { [$0] } ?? [])
+    }
 
     var body: some View {
         @Bindable var store = model.settings
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
                     AppHeader()
@@ -20,9 +35,9 @@ struct SettingsView: View {
                 .listRowInsets(EdgeInsets())
 
                 Section {
-                    NavigationLink {
-                        ModelSettingsPage()
-                    } label: {
+                    // By value, so the row and the library's banner both
+                    // arrive through the same destination below.
+                    NavigationLink(value: SettingsPage.model) {
                         LabeledContent("Model", value: activeModelName)
                     }
                 } footer: {
@@ -101,15 +116,20 @@ struct SettingsView: View {
                     }
                     .tint(.primary)
                 }
-                #if DEBUG
-                Section {
-                    page("Developer", value: "\(model.library.recordings.count) recordings") {
-                        DeveloperSettingsPage()
+                if DeveloperAccess.isAvailable {
+                    Section {
+                        page("Developer", value: "\(model.library.recordings.count) recordings") {
+                            DeveloperSettingsPage()
+                        }
+                    } footer: {
+                        Text(DeveloperAccess.footer)
                     }
-                } footer: {
-                    Text("Sample data for looking at the app. Debug builds only.")
                 }
-                #endif
+            }
+            .navigationDestination(for: SettingsPage.self) { page in
+                switch page {
+                case .model: ModelSettingsPage()
+                }
             }
             .navigationTitle("Settings")
             .inlineTitle()

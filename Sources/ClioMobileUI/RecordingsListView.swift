@@ -33,6 +33,9 @@ public enum HomeStyle: String, Sendable {
 struct HomeChrome: Equatable, Sendable {
     var onScreen = false
     var searching = false
+    /// Rows are being picked to delete. The record button and its wash are
+    /// gone for the duration: the delete bar stands where the button does.
+    var selecting = false
 }
 
 /// Carries `isSearching` out of the searchable view to the binding.
@@ -58,14 +61,26 @@ struct RecordingsListView: View {
     @State private var query = ""
     /// Up while the "Copied" toast is on screen.
     @State private var copied = false
+    /// Picking rows to delete: what is ticked, and whether the list is in
+    /// that mode at all. A long press on any row starts it.
+    ///
+    /// Ticked by hand rather than through `EditMode` and `List(selection:)`:
+    /// those put their circles on the leading edge and push the row across,
+    /// and the tick belongs where the copy button is — the row's trailing
+    /// edge, where the eye already is. It also keeps the whole thing off
+    /// `EditMode`, which does not exist on macOS.
+    @State private var selection: Set<Recording.ID> = []
+    @State private var selecting = false
+    @State private var confirmingDelete = false
     var style: HomeStyle = .default
     @Binding var chrome: HomeChrome
     var onRecord: () -> Void
     /// Opens Settings, for the banner when nothing is installed.
-    var onSettings: () -> Void = {}
+    var onSettings: (SettingsPage?) -> Void = { _ in }
 
     var body: some View {
         screen
+            .animation(.smooth(duration: 0.25), value: selecting)
             // Above the record button, where the transcribing toast goes,
             // so the two never sit in different places.
             .overlay(alignment: .bottom) {
@@ -76,6 +91,34 @@ struct RecordingsListView: View {
                 }
             }
             .animation(.smooth(duration: 0.3), value: copied)
+            .toolbar {
+                if selecting {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { endSelecting() }
+                    }
+                }
+            }
+            .deleteBar(showing: selecting && !selection.isEmpty) {
+                confirmingDelete = true
+            }
+            .alert(deletePrompt, isPresented: $confirmingDelete) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) { deleteSelected() }
+            } message: {
+                Text("The audio goes with the transcript, and there is no undo.")
+            }
+            // Reported up so RootView can take the record button away, and
+            // put it back the moment the mode ends.
+            .onChange(of: selecting, initial: true) { _, now in
+                chrome.selecting = now
+            }
+            // A recording deleted from somewhere else must not stay ticked.
+            .onChange(of: model.library.recordings) { _, recordings in
+                guard selecting else { return }
+                let alive = Set(recordings.map(\.id))
+                selection.formIntersection(alive)
+                if alive.isEmpty { endSelecting() }
+            }
             // The wash and the button are drawn by RootView, over the whole
             // navigation stack. It needs to know when this screen is the one
             // on show — and, because a pushed detail's arrival is what takes
@@ -212,7 +255,7 @@ struct RecordingsListView: View {
                     }
                 } actions: {
                     if model.models.installed.isEmpty {
-                        Button("Download", action: onSettings)
+                        Button("Download") { onSettings(.model) }
                             .fontWeight(.medium)
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
@@ -232,43 +275,95 @@ struct RecordingsListView: View {
 
     private var list: some View {
         List {
-            if model.models.installed.isEmpty {
+            if model.models.installed.isEmpty, !selecting {
                 noModelBanner
             }
             ForEach(sections, id: \.day) { section in
                 Section(section.day) {
                     ForEach(section.recordings) { recording in
-                        RecordingRow(recording: recording) { showCopied() }
-                            // The link is behind the row, not around it,
-                            // so the list draws no chevron: the length
-                            // pill has the right edge.
-                            .background {
+                        RecordingRow(recording: recording,
+                                     selecting: selecting,
+                                     selected: selection.contains(recording.id)) {
+                            showCopied()
+                        }
+                        // The link is behind the row, not around it, so the
+                        // list draws no chevron: the length pill has the
+                        // right edge. Gone while picking, or a tap would
+                        // open the recording instead of ticking it.
+                        .background {
+                            if !selecting {
                                 NavigationLink(value: recording.id) { EmptyView() }
                                     .opacity(0)
                             }
+                        }
+                        .contentShape(Rectangle())
+                        // Masked rather than left off when the list is not
+                        // picking: a tap gesture swallows the tap even when
+                        // its closure does nothing, and the link that opens
+                        // the recording sits behind the row. `.subviews`
+                        // hands the tap on instead of eating it.
+                        .gesture(TapGesture().onEnded { toggle(recording.id) },
+                                 including: selecting ? .all : .subviews)
+                        .onLongPressGesture { beginSelecting(recording.id) }
                     }
-                    .onDelete { offsets in
+                    // Swipe to delete is the other way to do this; one at a
+                    // time is not what the mode is for, and the red minus
+                    // would fight the tick for the left of the row.
+                    .onDelete(perform: selecting ? nil : { offsets in
                         for index in offsets {
                             model.library.delete(section.recordings[index])
                         }
-                    }
+                    })
                 }
             }
         }
         .softTopEdge()
     }
 
+    /// The long press that starts it ticks the row it landed on: nobody
+    /// holds a row down meaning "and now select nothing".
+    private func beginSelecting(_ id: Recording.ID) {
+        guard !selecting else { return }
+        if model.settings.settings.hapticFeedback { Haptics.selectionBegan() }
+        selection = [id]
+        withAnimation(.smooth(duration: 0.25)) { selecting = true }
+    }
+
+    private func toggle(_ id: Recording.ID) {
+        withAnimation(.smooth(duration: 0.2)) {
+            if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+        }
+    }
+
+    private func endSelecting() {
+        withAnimation(.smooth(duration: 0.25)) { selecting = false }
+        selection = []
+    }
+
+    private func deleteSelected() {
+        for id in selection { model.library.delete(id) }
+        endSelecting()
+    }
+
+    private var deletePrompt: String {
+        selection.count == 1
+            ? "Delete this recording?"
+            : "Delete these \(selection.count) recordings?"
+    }
+
+
     /// Recording works without a model — the audio is kept and can be
     /// transcribed later — but nobody should find that out from a failed
-    /// row. Shown until something is installed.
+    /// row. Shown until something is installed, and it opens Settings on
+    /// the Model page: the banner is about a download, not about settings.
     private var noModelBanner: some View {
         Section {
-            Button(action: onSettings) {
+            Button { onSettings(.model) } label: {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("No transcription model")
                             .font(.headline)
-                        Text("Recordings are saved but not transcribed until one is downloaded.")
+                        Text("Download to start recording.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -308,6 +403,10 @@ struct RecordingsListView: View {
 /// detail view; the row does not repeat it.
 struct RecordingRow: View {
     let recording: Recording
+    /// Rows are being picked: the tick takes the copy button's place, so
+    /// the row's trailing edge means one thing at a time.
+    var selecting = false
+    var selected = false
     /// Copying from the row, so a transcript can be had without opening
     /// it. The toast belongs to the screen, not the row, so the row only
     /// says it happened.
@@ -348,10 +447,30 @@ struct RecordingRow: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .pillGlass()
-            // Outside the pill, on the row's trailing edge: a transcript is
-            // one tap away without opening the recording. Left out when
-            // there is none to take — pending, failed, nothing heard.
-            if !recording.transcript.isEmpty {
+            trailingAction
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// One slot on the trailing edge, past the pill: the tick while rows
+    /// are being picked, the copy button otherwise, and nothing at all for
+    /// a recording with no transcript to take.
+    ///
+    /// Always the same width, held even when it is empty. The three take
+    /// different room — a circle is wider than the copy mark, and nothing
+    /// is widest of all — and without the frame every pill in the list
+    /// would slide as the mode changed or a row happened to have no
+    /// transcript.
+    private var trailingAction: some View {
+        Group {
+            if selecting {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .symbolRenderingMode(selected ? .palette : .monochrome)
+                    .foregroundStyle(selected ? Accent.ink : .secondary, Accent.lime)
+                    .font(.title3)
+                    .contentTransition(.symbolEffect(.replace))
+                    .accessibilityLabel(selected ? "Selected" : "Not selected")
+            } else if !recording.transcript.isEmpty {
                 Button("Copy Transcript", systemImage: "square.fill.on.square.fill") {
                     Clipboard.copy(recording.transcript)
                     onCopy()
@@ -364,10 +483,15 @@ struct RecordingRow: View {
                 // recording.
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+            } else {
+                Color.clear
             }
         }
-        .padding(.vertical, 2)
+        .frame(width: Self.actionWidth)
     }
+
+    /// Wide enough for the widest of the three, which is the tick.
+    static let actionWidth: CGFloat = 26
 
     /// A green check for a transcript, an orange cross when nothing was
     /// heard; nothing while it is pending or failed, which say so in words.
@@ -381,6 +505,31 @@ struct RecordingRow: View {
 }
 
 private extension View {
+    /// Delete, in the middle of the bottom toolbar. The bottom belongs to
+    /// the record button, which is gone while rows are being picked — so
+    /// the bar can have it, and the spacers put the button in the middle.
+    /// `showing` is false for no bar at all; macOS has neither a bottom bar
+    /// nor this mode.
+    @ViewBuilder
+    func deleteBar(showing: Bool, action: @escaping () -> Void) -> some View {
+        #if os(iOS)
+        toolbar {
+            if showing {
+                ToolbarItemGroup(placement: .bottomBar) {
+                    Spacer()
+                    // The word, not a trash can: the bar has one button on
+                    // it and the dialog that follows says how many.
+                    Button("Delete", role: .destructive, action: action)
+                        .tint(.red)
+                    Spacer()
+                }
+            }
+        }
+        #else
+        self
+        #endif
+    }
+
     /// The bar over a scrolled list stays translucent and fades into the
     /// rows, with no hairline where the two meet. Before iOS 26 the bar's
     /// own blur applies, which draws its usual line.

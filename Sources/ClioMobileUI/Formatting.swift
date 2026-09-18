@@ -40,6 +40,13 @@ enum Haptics {
         #endif
     }
 
+    /// The press has been taken and the list has changed under the finger.
+    @MainActor static func selectionBegan() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        #endif
+    }
+
     @MainActor static func failure() {
         #if canImport(UIKit)
         UINotificationFeedbackGenerator().notificationOccurred(.error)

@@ -1,9 +1,9 @@
 import ClioMobileCore
 import SwiftUI
 
-#if DEBUG
-/// Settings ▸ Developer: sample data for looking at the app on a phone or
-/// a simulator without recording anything. Debug builds only.
+/// Settings ▸ Developer: sample data and staged screens, for looking at
+/// the app on a phone without recording anything. Shown in debug builds
+/// and in TestFlight — see `DeveloperAccess`.
 struct DeveloperSettingsPage: View {
     @Environment(AppModel.self) private var model
     @State private var message: String?
@@ -32,6 +32,7 @@ struct DeveloperSettingsPage: View {
             } footer: {
                 Text("The sheet a first run gets.")
             }
+            PagePreviewsSection()
             if let message {
                 Section {
                     Text(message).foregroundStyle(.secondary)
@@ -191,4 +192,3 @@ private struct SeededGenerator: RandomNumberGenerator {
         return state
     }
 }
-#endif
