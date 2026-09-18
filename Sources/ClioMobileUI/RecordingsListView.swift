@@ -75,6 +75,13 @@ struct RecordingsListView: View {
     var style: HomeStyle = .default
     @Binding var chrome: HomeChrome
     var onRecord: () -> Void
+    /// Pushes a recording. Done by hand rather than with a `NavigationLink`
+    /// in the row: the link was invisible and behind the row, and worked
+    /// only because a `List` cell activates a link it finds in its own
+    /// subtree. A long press on the row takes the touch away from the cell
+    /// before that can happen, and the row stops opening. A tap the row
+    /// owns outright has nothing to lose it to.
+    var onOpen: (Recording.ID) -> Void = { _ in }
     /// Opens Settings, for the banner when nothing is installed.
     var onSettings: (SettingsPage?) -> Void = { _ in }
 
@@ -286,24 +293,16 @@ struct RecordingsListView: View {
                                      selected: selection.contains(recording.id)) {
                             showCopied()
                         }
-                        // The link is behind the row, not around it, so the
-                        // list draws no chevron: the length pill has the
-                        // right edge. Gone while picking, or a tap would
-                        // open the recording instead of ticking it.
-                        .background {
-                            if !selecting {
-                                NavigationLink(value: recording.id) { EmptyView() }
-                                    .opacity(0)
+                        // The whole row, gaps included, so a tap anywhere
+                        // but the copy button counts.
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if selecting {
+                                toggle(recording.id)
+                            } else {
+                                onOpen(recording.id)
                             }
                         }
-                        .contentShape(Rectangle())
-                        // Masked rather than left off when the list is not
-                        // picking: a tap gesture swallows the tap even when
-                        // its closure does nothing, and the link that opens
-                        // the recording sits behind the row. `.subviews`
-                        // hands the tap on instead of eating it.
-                        .gesture(TapGesture().onEnded { toggle(recording.id) },
-                                 including: selecting ? .all : .subviews)
                         .onLongPressGesture { beginSelecting(recording.id) }
                     }
                     // Swipe to delete is the other way to do this; one at a

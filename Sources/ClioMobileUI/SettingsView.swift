@@ -14,6 +14,8 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDeleteAll = false
+    /// A model that would not delete, shown once and dismissed.
+    @State private var deleteError: String?
     /// The stack starts here, so opening on the Model page lands there
     /// rather than sliding there after the sheet is up — and Back still
     /// goes to Settings itself. A `navigationDestination(isPresented:)`
@@ -313,20 +315,58 @@ struct SettingsView: View {
                     .foregroundStyle(.orange)
                     .font(.footnote)
             }
-            Button("Delete All Recordings", role: .destructive) {
+            Button("Delete…", role: .destructive) {
                 confirmingDeleteAll = true
             }
-            .disabled(model.library.recordings.isEmpty)
+            .disabled(nothingToDelete)
         } footer: {
             Text("Everything Clio records and transcribes stays on this phone.")
         }
-        .confirmationDialog("Delete every recording?", isPresented: $confirmingDeleteAll,
+        // A sheet rather than an alert: there is a choice to make before
+        // there is anything to confirm, and the two destructive rows are
+        // the confirmation.
+        .confirmationDialog("What should Clio delete?", isPresented: $confirmingDeleteAll,
                             titleVisibility: .visible) {
-            Button("Delete All Recordings", role: .destructive) {
+            Button("Delete Recordings", role: .destructive) {
                 model.library.deleteAll()
             }
+            .disabled(model.library.recordings.isEmpty)
+            Button("Delete Everything", role: .destructive) {
+                model.library.deleteAll()
+                deleteInstalledModels()
+            }
         } message: {
-            Text("This removes all audio and transcripts from this phone. It cannot be undone.")
+            Text("Recordings are the audio and the transcripts. Everything is those "
+                 + "and the downloaded models too — \(Format.bytes(onThisPhone)) in all. "
+                 + "Your settings are kept either way, and neither can be undone.")
+        }
+        .alert("Not everything could be deleted",
+               isPresented: .constant(deleteError != nil)) {
+            Button("OK") { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
+    }
+
+    private var onThisPhone: Int64 {
+        model.library.audioBytes + model.models.installedBytes
+    }
+
+    private var nothingToDelete: Bool {
+        model.library.recordings.isEmpty && model.models.installed.isEmpty
+    }
+
+    /// Every model in Clio's own folder. A model that will not go is
+    /// reported rather than swallowed: the row would otherwise stay on
+    /// screen with no explanation.
+    private func deleteInstalledModels() {
+        for installed in model.models.installed {
+            do {
+                try model.models.delete(installed)
+            } catch {
+                deleteError = error.localizedDescription
+                return
+            }
         }
     }
 

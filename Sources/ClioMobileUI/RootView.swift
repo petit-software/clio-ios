@@ -111,6 +111,7 @@ public struct RootView: View {
             RecordingsListView(style: homeStyle,
                                chrome: $chrome,
                                onRecord: { showingRecorder = true },
+                               onOpen: { path = [$0] },
                                onSettings: { settingsSheet = SettingsSheet(page: $0) })
                 .navigationDestination(for: Recording.ID.self) { id in
                     RecordingDetailView(id: id, copiedOnArrival: autoCopied == id)
