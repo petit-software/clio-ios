@@ -17,11 +17,19 @@ enum DeveloperAccess {
         #endif
     }
 
-    /// TestFlight installs carry a sandbox receipt where the App Store
-    /// puts a real one; a build that was never bought has no receipt file
-    /// on disk at all, only the URL.
+    /// TestFlight installs carry a `sandboxReceipt` in the bundle's StoreKit
+    /// folder where the App Store puts a plain `receipt`.
+    ///
+    /// The path is read rather than `Bundle.appStoreReceiptURL`, which is
+    /// deprecated from iOS 18 in favour of `AppTransaction`. The same
+    /// heuristic either way — and `AppTransaction.shared` is async and can
+    /// reach the network or ask the user to sign in, which is far too much
+    /// for deciding whether to draw a row in Settings.
     static var isTestFlight: Bool {
-        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        let receipt = Bundle.main.bundleURL
+            .appendingPathComponent("StoreKit", isDirectory: true)
+            .appendingPathComponent("sandboxReceipt")
+        return FileManager.default.fileExists(atPath: receipt.path)
     }
 
     static var footer: String {

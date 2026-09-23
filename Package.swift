@@ -20,6 +20,9 @@ let package = Package(
         // CoreML Whisper with an Apple Neural Engine path. The same version
         // the Mac app pins, so the two engines behave the same.
         .package(url: "https://github.com/argmaxinc/WhisperKit", from: "1.1.0"),
+        // A language model on the phone's GPU, for titles and summaries
+        // where Apple Intelligence is not there. Apple's own framework.
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.29.1"),
     ],
     targets: [
         // Everything that is not SwiftUI: settings, the library of
@@ -34,9 +37,18 @@ let package = Package(
         // it may raise. AVAudioEngine throws them; Swift cannot catch them.
         .target(name: "ClioMobileObjC"),
         .target(name: "ClioMobileActivity"),
+        // MLX, and nothing else: the core stays free of it, so `swift test`
+        // and every preview keep building without a language model.
+        .target(name: "ClioMobileSummary",
+                dependencies: [
+                    "ClioMobileCore",
+                    .product(name: "MLXLLM", package: "mlx-swift-examples"),
+                    .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
+                ]),
         // Every view, plus AppModel. A library so #Preview renders
         // dependably.
-        .target(name: "ClioMobileUI", dependencies: ["ClioMobileCore", "ClioMobileActivity"]),
+        .target(name: "ClioMobileUI",
+                dependencies: ["ClioMobileCore", "ClioMobileActivity", "ClioMobileSummary"]),
         .testTarget(name: "ClioMobileCoreTests", dependencies: ["ClioMobileCore"]),
     ]
 )

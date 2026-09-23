@@ -17,9 +17,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             completionHandler()
             return
         }
-        let handler: @Sendable () -> Void = { MainActor.assumeIsolated(completionHandler) }
+        // UIKit hands back a plain `() -> Void`, which is not Sendable, and
+        // the downloader wants a `@Sendable` one. Both ends are the main
+        // thread — UIKit calls this method there, and `assumeIsolated` runs
+        // the handler there — so the box says what is already true rather
+        // than pretending the closure is something it is not.
+        let box = MainActorBox(completionHandler)
+        let handler: @Sendable () -> Void = { MainActor.assumeIsolated(box.value) }
         BackgroundDownloader.shared.backgroundEventsCompletion = handler
     }
+}
+
+/// Carries a main-thread-only value through a `@Sendable` closure. Unchecked
+/// because the compiler cannot see the isolation; `MainActor.assumeIsolated`
+/// at the far end is what checks it, and traps if it is ever wrong.
+private struct MainActorBox<Value>: @unchecked Sendable {
+    let value: Value
+    init(_ value: Value) { self.value = value }
 }
 #endif
 

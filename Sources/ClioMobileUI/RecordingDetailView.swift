@@ -582,7 +582,10 @@ enum ToastLayout {
         .opacity.combined(with: .scale(scale: 0.85))
     }
 
-    /// Room to sit above the floating record button on the list.
+    /// Room to sit above the floating record button on the list. On the
+    /// main actor because the numbers it adds up belong to a View, and in
+    /// Swift 6 that makes them main-actor too — every caller is a body.
+    @MainActor
     static func bottomInset(above safeAreaBottom: CGFloat) -> CGFloat {
         FloatingRecordPane.buttonHeight + FloatingRecordPane.buttonBottomPadding
             + safeAreaBottom + 16
