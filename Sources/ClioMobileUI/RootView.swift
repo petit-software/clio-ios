@@ -66,7 +66,7 @@ public struct RootView: View {
                 }
                 .animation(.smooth(duration: 0.35), value: held)
                 .overlay(alignment: .bottom) {
-                    if homeStyle == .floating && chrome.onScreen && !chrome.selecting {
+                    if homeStyle == .floating && recordsHere {
                         FloatingRecordPane(onRecord: { showingRecorder = true },
                                            showsButton: !needsModelFirst,
                                            searching: chrome.searching)
@@ -94,10 +94,15 @@ public struct RootView: View {
     /// the button goes back and the clock takes the middle.
     private var held: Bool {
         homeStyle == .floating
-            && chrome.onScreen
-            && !chrome.selecting
+            && recordsHere
             && model.settings.settings.holdToRecord
             && model.capture.state.isCapturing
+    }
+
+    /// The screen on show has the record button: the library, unless rows
+    /// are being picked, or a recording, which it records more into.
+    private var recordsHere: Bool {
+        (chrome.onScreen && !chrome.selecting) || !path.isEmpty
     }
 
     /// Nothing installed and nothing recorded: the button is left out, and
@@ -166,6 +171,11 @@ public struct RootView: View {
             showingRecorder = false
             settingsSheet = nil
             path = [id]
+        }
+        // On a recording, the button records into it; on the library, a
+        // recording of its own.
+        .onChange(of: path, initial: true) { _, path in
+            model.capture.appendTarget = path.last
         }
         .onChange(of: model.capture.state, initial: true) { _, state in
             activity.update(for: state, maxSeconds: model.capture.maxSeconds)

@@ -105,7 +105,8 @@ struct RecordingsListView: View {
                     }
                 }
             }
-            .deleteBar(showing: selecting && !selection.isEmpty) {
+            .deleteBar(showing: selecting && !selection.isEmpty,
+                       merge: selection.count > 1 ? { mergeSelected() } : nil) {
                 confirmingDelete = true
             }
             .alert(deletePrompt, isPresented: $confirmingDelete) {
@@ -339,6 +340,16 @@ struct RecordingsListView: View {
         selection = []
     }
 
+    /// The ticked recordings as one, oldest first, each keeping its audio
+    /// and its words; then the title and summary are written again over
+    /// the whole, and it opens. Split undoes it, from the recording's menu.
+    private func mergeSelected() {
+        guard let merged = model.library.merge(selection) else { return }
+        endSelecting()
+        model.intelligence.resummarize(merged)
+        onOpen(merged)
+    }
+
     private func deleteSelected() {
         for id in selection { model.library.delete(id) }
         endSelecting()
@@ -510,16 +521,32 @@ private extension View {
     /// `showing` is false for no bar at all; macOS has neither a bottom bar
     /// nor this mode.
     @ViewBuilder
-    func deleteBar(showing: Bool, action: @escaping () -> Void) -> some View {
+    func deleteBar(showing: Bool, merge: (() -> Void)? = nil,
+                   action: @escaping () -> Void) -> some View {
         #if os(iOS)
         toolbar {
             if showing {
                 ToolbarItemGroup(placement: .bottomBar) {
                     Spacer()
-                    // The word, not a trash can: the bar has one button on
-                    // it and the dialog that follows says how many.
-                    Button("Delete", role: .destructive, action: action)
+                    // Merge beside Delete once there are two to put
+                    // together; the words, not symbols, since the alert
+                    // that follows Delete says how many. One item, so the
+                    // two share one capsule with a hairline between them,
+                    // and each word has room either side.
+                    HStack(spacing: 0) {
+                        if let merge {
+                            Button(action: merge) {
+                                Text("Merge").padding(.horizontal, 10)
+                            }
+                            Divider()
+                                .frame(height: 18)
+                        }
+                        Button(role: .destructive, action: action) {
+                            Text("Delete").padding(.horizontal, 10)
+                        }
                         .tint(.red)
+                    }
+                    .fixedSize()
                     Spacer()
                 }
             }
@@ -565,9 +592,14 @@ struct FloatingRecordPane: View {
     var searching = false
     @Environment(AppModel.self) private var model
     @Environment(\.safeAreaInsets) private var safeArea
+    /// The meter as drawn: a spring per bar, stepped once a frame.
+    @State private var meter = WashMeter()
+    /// The frame clock runs while a held recording does, and a moment
+    /// after, for the edge to settle; otherwise nothing is redrawn.
+    @State private var animating = false
 
     /// How far above the button the wash reaches before it is gone.
-    static let washAboveButton: CGFloat = 72
+    static let washAboveButton: CGFloat = 60
     static let buttonHeight: CGFloat = 56
     static let buttonBottomPadding: CGFloat = 12
 
@@ -588,11 +620,41 @@ struct FloatingRecordPane: View {
             // the other, and it settles flat between words. The bars are
             // gated in silence, unlike the raw level, so it does not fidget
             // to room noise.
-            let bands = held ? capture.bands : [Float](repeating: 0, count: MeterAnalyzer.barCount)
+            //
+            // The levels come in ~60 times a second, and the screen draws up
+            // to 120: an animation started on each new level is cut short by
+            // the next and moves in jerks. Instead a spring per bar chases
+            // the latest level, stepped on the display's own clock, so the
+            // edge moves every frame and never changes speed abruptly.
             let base = Self.washAboveButton + Self.buttonHeight
                      + Self.buttonBottomPadding + bottomInset
                      + (held ? Self.washWhileHeld : 0)
             let height = base + Self.washSwell
+            TimelineView(.animation(paused: !animating)) { context in
+                let bars = animating
+                    ? meter.step(toward: held ? capture.bands : [], at: context.date)
+                    : BarVector([Float](repeating: 0, count: MeterAnalyzer.barCount))
+                wash(bars: bars, base: base, height: height, held: held)
+            }
+            .animation(.smooth(duration: 0.3), value: held)
+            .onChange(of: held, initial: true) { _, now in
+                if now {
+                    animating = true
+                } else {
+                    // Long enough for the springs to come down to rest.
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        guard !(model.settings.settings.holdToRecord
+                                && model.capture.state.isCapturing) else { return }
+                        animating = false
+                        meter.reset()
+                    }
+                }
+            }
+        }
+    }
+
+    private func wash(bars: BarVector, base: CGFloat, height: CGFloat, held: Bool) -> some View {
             ZStack(alignment: .bottom) {
                 // Under the colour, a blur that comes on with it: nothing at
                 // the top of the wash, the full radius by the button, so the
@@ -604,13 +666,11 @@ struct FloatingRecordPane: View {
                 WashBlur(strength: held ? 1 : 0.6)
                     .frame(height: height)
                     .mask {
-                        VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell,
+                        VoiceWash(bars: bars, base: base, swell: Self.washSwell,
                                   held: held, solid: true)
-                            .animation(.smooth(duration: 0.1), value: bands)
                     }
                     .allowsHitTesting(false)
-                VoiceWash(bars: BarVector(bands), base: base, swell: Self.washSwell, held: held)
-                    .animation(.smooth(duration: 0.1), value: bands)
+                VoiceWash(bars: bars, base: base, swell: Self.washSwell, held: held)
                     .frame(height: height)
                     .allowsHitTesting(false)
                 if showsButton {
@@ -619,8 +679,6 @@ struct FloatingRecordPane: View {
                         .padding(.bottom, Self.buttonBottomPadding + bottomInset)
                 }
             }
-            .animation(.smooth(duration: 0.3), value: held)
-        }
     }
 
     private var bottomInset: CGFloat {
@@ -629,6 +687,52 @@ struct FloatingRecordPane: View {
         #else
         0
         #endif
+    }
+}
+
+/// The wash's six bars as drawn. Each is a critically damped spring pulled
+/// toward the latest level: it rises quickly to a syllable, falls more
+/// slowly after it, and never overshoots. Stepped by the time between
+/// frames, so it moves the same at 60 Hz and 120. A class, not state: it
+/// changes every frame, and only the frame clock needs to know.
+@MainActor
+final class WashMeter {
+    private var position = [Double](repeating: 0, count: MeterAnalyzer.barCount)
+    private var velocity = [Double](repeating: 0, count: MeterAnalyzer.barCount)
+    private var last: Date?
+
+    /// Stiffness, as the spring's natural frequency in radians a second.
+    static let rise = 26.0
+    static let fall = 11.0
+
+    /// An empty target is silence: every bar back to rest.
+    func step(toward target: [Float], at date: Date) -> BarVector {
+        // A frame dropped, or the first one: never a leap of more than a
+        // thirtieth of a second, which is what would make it jump.
+        let dt = min(max(date.timeIntervalSince(last ?? date), 0), 1.0 / 30)
+        last = date
+        // Split into substeps so a long frame integrates as stably as a
+        // short one.
+        let substeps = max(1, Int((dt * 240).rounded(.up)))
+        let h = dt / Double(substeps)
+        for index in position.indices {
+            let goal = index < target.count ? Double(target[index]) : 0
+            let omega = goal > position[index] ? Self.rise : Self.fall
+            for _ in 0..<substeps {
+                let acceleration = omega * omega * (goal - position[index])
+                    - 2 * omega * velocity[index]
+                velocity[index] += acceleration * h
+                position[index] += velocity[index] * h
+            }
+            position[index] = min(max(position[index], 0), 1)
+        }
+        return BarVector(values: position)
+    }
+
+    func reset() {
+        position = position.map { _ in 0 }
+        velocity = velocity.map { _ in 0 }
+        last = nil
     }
 }
 
@@ -683,19 +787,21 @@ struct VoiceWash: View, @preconcurrency Animatable {
 
     /// Below this a bar is silence: the edge does not move for a breath.
     static let floor = 0.06
+    /// How far down the wash the fade runs before the colour is solid.
+    static let fadeEnd = 1.0
+    /// The ease-in's power. Higher keeps the colour faint further down:
+    /// at 2.4 it is a fifth of full strength halfway, two thirds at 85%.
+    static let fadeCurve = 2.4
     static let columns = 96
 
     var body: some View {
         Canvas { context, size in
-            let stops: [Gradient.Stop] = solid ? [
-                .init(color: .clear, location: 0),
-                .init(color: .black, location: 0.25),
-                .init(color: .black, location: 1),
-            ] : [
-                .init(color: Accent.lime.opacity(0), location: 0),
-                .init(color: Accent.lime.opacity(held ? 0.6 : 0.35), location: 0.45),
-                .init(color: Accent.lime.opacity(held ? 1 : 0.95), location: 1),
-            ]
+            let stops: [Gradient.Stop] = solid
+                ? Self.easedStops(.black, to: 1, reaching: 0.25)
+                // Faint for most of the way down and only full at the
+                // screen edge: an ease-in, so it gathers late, not early.
+                : Self.easedStops(Accent.lime, to: 1, reaching: Self.fadeEnd,
+                                  curve: { pow($0, Self.fadeCurve) })
             let gradient = Gradient(stops: stops)
             let heights = Self.smoothed(bars.values)
             // Column edges on device pixels, no overlap: an edge between
@@ -714,6 +820,23 @@ struct VoiceWash: View, @preconcurrency Animatable {
                                                    endPoint: CGPoint(x: 0, y: rect.maxY)))
             }
         }
+    }
+
+    /// Nothing at the top to `opacity` at `reaching` (0…1 down the wash),
+    /// along a smoothstep: it leaves the background with no slope at all,
+    /// so there is no line where the colour starts, and the many stops
+    /// keep a bend in a straight-line ramp from showing as a band.
+    static func easedStops(_ color: Color, to opacity: Double,
+                           reaching end: Double = 1, count: Int = 24,
+                           curve: (Double) -> Double = { $0 * $0 * (3 - 2 * $0) })
+        -> [Gradient.Stop] {
+        var stops = (0...count).map { i -> Gradient.Stop in
+            let t = Double(i) / Double(count)
+            let eased = curve(t)
+            return .init(color: color.opacity(opacity * eased), location: t * end)
+        }
+        if end < 1 { stops.append(.init(color: color.opacity(opacity), location: 1)) }
+        return stops
     }
 
     /// The bars above the floor, each blended with its neighbours so a
@@ -757,11 +880,7 @@ struct WashBlur: View {
             .fill(.regularMaterial)
             .mask {
                 LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black.opacity(0.6 * strength), location: 0.45),
-                        .init(color: .black.opacity(strength), location: 0.7),
-                    ],
+                    stops: VoiceWash.easedStops(.black, to: strength, reaching: VoiceWash.fadeEnd),
                     startPoint: .top, endPoint: .bottom)
             }
     }
@@ -791,7 +910,9 @@ struct FloatingRecordButton: View {
             } else {
                 Button(action: onRecord) { label(capture) }
                     .buttonStyle(RecordStripStyle())
-                    .accessibilityHint("Starts a new recording")
+                    .accessibilityHint(model.capture.appendTarget == nil
+                                       ? "Starts a new recording"
+                                       : "Records more into this recording")
             }
         }
     }
@@ -841,12 +962,17 @@ struct FloatingRecordButton: View {
     /// No clock while holding: the finger is on the button and the wash
     /// shows the voice. The word says what the button does, then what it
     /// is doing.
+    /// On a recording's page the button adds to it, and says so in the
+    /// title rather than a second line.
     private func title(_ capture: CaptureController) -> String {
-        guard model.settings.settings.holdToRecord else { return "Record" }
+        let adding = model.capture.appendTarget != nil
+        guard model.settings.settings.holdToRecord else {
+            return adding ? "Add a Recording" : "Record"
+        }
         switch capture.state {
         case .starting: return "Starting…"
         case .recording, .interrupted, .paused: return "Recording"
-        case .transcribing, .idle, .failed: return "Hold to Record"
+        case .transcribing, .idle, .failed: return adding ? "Add a Recording" : "Hold to Record"
         }
     }
 

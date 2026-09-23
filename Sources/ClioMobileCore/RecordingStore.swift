@@ -46,10 +46,10 @@ public final class RecordingStore {
         let store = RecordingStore(indexURL: root.appendingPathComponent("never-written.json"),
                                    audioDirectory: root)
         store.recordings = recordings.sorted { $0.createdAt > $1.createdAt }
-        for recording in recordings where recording.duration > 0 {
-            let url = store.audioURL(for: recording)
+        for part in recordings.flatMap(\.parts) where part.duration > 0 {
+            let url = store.audioURL(for: part)
             guard !FileManager.default.fileExists(atPath: url.path) else { continue }
-            try? AudioFiles.write(AudioFiles.tone(seconds: recording.duration), to: url)
+            try? AudioFiles.write(AudioFiles.tone(seconds: part.duration), to: url)
         }
         return store
     }
@@ -57,8 +57,10 @@ public final class RecordingStore {
     /// A recording with a synthesized tone for audio, so it plays and
     /// seeks like a real one. For the Developer page's sample data.
     public func addSample(_ recording: Recording) throws {
-        try AudioFiles.write(AudioFiles.tone(seconds: recording.duration),
-                             to: audioURL(for: recording))
+        for part in recording.parts {
+            try AudioFiles.write(AudioFiles.tone(seconds: part.duration),
+                                 to: audioURL(for: part))
+        }
         add(recording)
     }
 
@@ -66,9 +68,18 @@ public final class RecordingStore {
         recordings.first { $0.id == id }
     }
 
-    /// Where a new recording's audio should be written, before it is added.
+    /// The first part's audio. For a recording of one part, its audio.
     public func audioURL(for recording: Recording) -> URL {
         audioDirectory.appendingPathComponent(recording.audioFileName)
+    }
+
+    public func audioURL(for part: RecordingPart) -> URL {
+        audioDirectory.appendingPathComponent(part.audioFileName)
+    }
+
+    /// Every part's audio, oldest first.
+    public func audioURLs(for recording: Recording) -> [URL] {
+        recording.parts.map(audioURL(for:))
     }
 
     public func newAudioURL(for id: UUID) -> URL {
@@ -100,7 +111,7 @@ public final class RecordingStore {
     /// and of the two the leak is the one nobody sees.
     public func delete(_ id: Recording.ID) {
         guard let recording = self[id] else { return }
-        try? FileManager.default.removeItem(at: audioURL(for: recording))
+        for url in audioURLs(for: recording) { try? FileManager.default.removeItem(at: url) }
         recordings.removeAll { $0.id == id }
         save()
     }
@@ -108,8 +119,8 @@ public final class RecordingStore {
     public func delete(_ recording: Recording) { delete(recording.id) }
 
     public func deleteAll() {
-        for recording in recordings {
-            try? FileManager.default.removeItem(at: audioURL(for: recording))
+        for url in recordings.flatMap(audioURLs(for:)) {
+            try? FileManager.default.removeItem(at: url)
         }
         recordings = []
         save()
@@ -117,11 +128,53 @@ public final class RecordingStore {
 
     /// Bytes of audio on disk, for About.
     public var audioBytes: Int64 {
-        recordings.reduce(0) { total, recording in
-            let size = (try? audioURL(for: recording)
-                .resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+        recordings.reduce(0) { $0 + audioBytes(of: $1) }
+    }
+
+    public func audioBytes(of recording: Recording) -> Int64 {
+        audioURLs(for: recording).reduce(0) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
             return total + Int64(size ?? 0)
         }
+    }
+
+    // MARK: Parts
+
+    /// A new part at the end of a recording: recorded again from inside it.
+    /// False if the recording has gone in the meantime, and the part's audio
+    /// has nowhere to belong.
+    @discardableResult
+    public func append(_ part: RecordingPart, to id: Recording.ID) -> Bool {
+        guard var recording = self[id] else { return false }
+        recording.parts.append(part)
+        update(recording)
+        return true
+    }
+
+    /// Several recordings as one, under the oldest's id. Nothing is deleted
+    /// from disk: every file is a part of the merged recording now. Returns
+    /// the merged recording's id.
+    @discardableResult
+    public func merge(_ ids: some Collection<Recording.ID>) -> Recording.ID? {
+        let chosen = recordings.filter { ids.contains($0.id) }
+        guard chosen.count > 1, let merged = Recording.merging(chosen) else { return nil }
+        let absorbed = Set(chosen.map(\.id)).subtracting([merged.id])
+        recordings.removeAll { absorbed.contains($0.id) }
+        update(merged)
+        return merged.id
+    }
+
+    /// Each part its own recording again. The audio stays where it is.
+    /// Returns the ids, oldest first.
+    @discardableResult
+    public func split(_ id: Recording.ID) -> [Recording.ID] {
+        guard let recording = self[id], recording.parts.count > 1 else { return [] }
+        let singles = recording.splitting()
+        recordings.removeAll { $0.id == id }
+        recordings.append(contentsOf: singles)
+        recordings.sort { $0.createdAt > $1.createdAt }
+        save()
+        return singles.map(\.id)
     }
 
     // MARK: Persistence

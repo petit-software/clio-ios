@@ -58,13 +58,20 @@ public enum CaptureState: Sendable, Equatable {
 public final class CaptureController {
 
     public private(set) var state: CaptureState = .idle
-    /// 0…1, for the meter. Polled from the recorder ~30×/s while recording.
+    /// 0…1, for the meter. Polled from the recorder ~60×/s while recording.
     public private(set) var level: Float = 0
     /// Six bars, 0…1 each, polled with the level. See `MeterAnalyzer`.
     public private(set) var bands: [Float] = Array(repeating: 0, count: MeterAnalyzer.barCount)
     public private(set) var elapsed: TimeInterval = 0
     /// The recording most recently added, so the UI can open it.
     public private(set) var lastRecordingID: Recording.ID?
+    /// Where the next recording goes: a new part at the end of this one,
+    /// or, when nil, a recording of its own. Set by the screen on show —
+    /// a recording's detail sets it to that recording — and read once, at
+    /// the start, so walking away mid-recording does not move it.
+    public var appendTarget: Recording.ID?
+    /// The target the capture in progress was started with.
+    public private(set) var appendingTo: Recording.ID?
 
     public let recorder: any AudioCapturing
     public let engine: any TranscriptionEngine
@@ -181,6 +188,7 @@ public final class CaptureController {
     public func start(discardingSilence: Bool = false) async {
         guard !state.isBusy else { return }
         discardSilence = discardingSilence
+        appendingTo = appendTarget.flatMap { library[$0]?.id }
         state = .starting
         level = 0
         elapsed = 0
@@ -248,8 +256,10 @@ public final class CaptureController {
             locationTask?.cancel()
             locationTask = nil
             await recorder.cancel()
+            appendingTo = nil
             state = .idle
         case .transcribing:
+            appendingTo = nil
             transcribeTask?.cancel()
             transcribeTask = nil
             state = .idle
@@ -291,6 +301,7 @@ public final class CaptureController {
 
         let id = UUID()
         let audioURL = library.newAudioURL(for: id)
+        let target = appendingTo
 
         // The audio is saved before anything else can go wrong. A transcript
         // that fails can be retried; a recording that was never written is
@@ -302,41 +313,64 @@ public final class CaptureController {
             return
         }
 
-        var recording = Recording(id: id,
-                                  duration: result.duration,
-                                  audioFileName: audioURL.lastPathComponent,
-                                  status: .pending)
-        recording.location = await locationTask?.value
+        var part = RecordingPart(id: id,
+                                 duration: result.duration,
+                                 audioFileName: audioURL.lastPathComponent,
+                                 status: .pending)
+        let location = await locationTask?.value
         locationTask = nil
 
         // Nothing in it, but this was a tap: the audio was asked for, so the
         // row lands as "Nothing was heard" without the model being woken
         // for it. Transcribe Again is there if the gate got it wrong.
         guard verdict.isSpeech else {
-            recording.status = .nothingHeard
-            library.add(recording)
-            lastRecordingID = id
+            part.status = .nothingHeard
+            land(part, location: location, into: target)
             state = .idle
             return
         }
 
         let task = Task { [weak self] in
             guard let self else { return }
-            await self.transcribe(result.samples, into: &recording)
+            await self.transcribe(result.samples, into: &part)
             guard !Task.isCancelled else { return }
-            if self.discardSilence, recording.status == .nothingHeard {
+            if self.discardSilence, part.status == .nothingHeard {
                 self.discard(audioURL)
                 self.state = .idle
                 return
             }
-            self.library.add(recording)
-            self.lastRecordingID = recording.id
+            let landed = self.land(part, location: location, into: target)
             self.state = .idle
-            self.intelligence?.summarizeIfEnabled(recording.id)
+            if target != nil {
+                // More words under the same title: the summary is about
+                // all of them, so it is written again.
+                self.intelligence?.resummarize(landed)
+            } else {
+                self.intelligence?.summarizeIfEnabled(landed)
+            }
         }
         transcribeTask = task
         await task.value
         transcribeTask = nil
+    }
+
+    /// Into the library: a part at the end of the target, or a recording of
+    /// its own when there is no target, or it was deleted while this one
+    /// was being made. Returns the recording it landed in.
+    @discardableResult
+    private func land(_ part: RecordingPart, location: RecordingLocation?,
+                      into target: Recording.ID?) -> Recording.ID {
+        appendingTo = nil
+        if let target, library.append(part, to: target) {
+            lastRecordingID = target
+            return target
+        }
+        var recording = Recording(id: part.id, createdAt: part.createdAt, duration: 0,
+                                  location: location)
+        recording.parts = [part]
+        library.add(recording)
+        lastRecordingID = recording.id
+        return recording.id
     }
 
     /// A capture with nothing in it, gone as if it never happened.
@@ -349,11 +383,22 @@ public final class CaptureController {
     public func retranscribe(_ id: Recording.ID) async {
         guard !state.isBusy, var recording = library[id] else { return }
         state = .transcribing
-        do {
-            let samples = try AudioFiles.read(library.audioURL(for: recording))
-            await transcribe(samples, into: &recording)
-        } catch {
-            recording.status = .failed(error.localizedDescription)
+        for index in recording.parts.indices {
+            do {
+                let samples = try AudioFiles.read(library.audioURL(for: recording.parts[index]))
+                await transcribe(samples, into: &recording.parts[index])
+            } catch {
+                recording.parts[index].status = .failed(error.localizedDescription)
+            }
+        }
+        // Re-read: renamed or summarized while this ran, those stand.
+        if var current = library[id] {
+            for part in recording.parts {
+                if let index = current.parts.firstIndex(where: { $0.id == part.id }) {
+                    current.parts[index] = part
+                }
+            }
+            recording = current
         }
         library.update(recording)
         state = .idle
@@ -362,7 +407,7 @@ public final class CaptureController {
 
     /// Trim, load, transcribe, format. Writes the outcome into the recording
     /// and never throws: whatever went wrong is the recording's status.
-    private func transcribe(_ captured: [Float], into recording: inout Recording) async {
+    private func transcribe(_ captured: [Float], into recording: inout RecordingPart) async {
         let current = settings.settings
 
         guard let model = activeModel else {
@@ -436,7 +481,10 @@ public final class CaptureController {
                     await self.stop()
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(33))
+                // Twice the old rate: the wash chases these on every frame,
+                // and a level that is fresher is a wash that is closer to
+                // the voice.
+                try? await Task.sleep(for: .milliseconds(16))
             }
         }
     }

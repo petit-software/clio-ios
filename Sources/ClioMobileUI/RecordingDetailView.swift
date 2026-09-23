@@ -2,16 +2,20 @@ import AVFoundation
 import ClioMobileCore
 import SwiftUI
 
-/// One recording: play it, read it, name it, share it, delete it.
+/// One recording: play it, read it, name it, share it, delete it — and
+/// record more into it, from the button at the foot of the screen.
 struct RecordingDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.safeAreaInsets) private var safeArea
     let id: Recording.ID
     /// The transcript was copied on the way in (auto copy): say so.
     var copiedOnArrival = false
 
     @State private var player = AudioPlayerController()
+    /// The part the player has loaded. Nil until something is loaded.
+    @State private var playingPart: RecordingPart.ID?
     @State private var title = ""
     @State private var confirmingDelete = false
     @State private var copied = false
@@ -26,21 +30,40 @@ struct RecordingDetailView: View {
 
     private func content(_ recording: Recording) -> some View {
         List {
-            Section("Transcript") {
-                transcript(recording)
+            Section {
+                if recording.parts.count == 1 {
+                    transcript(recording.parts[0], of: recording)
+                } else {
+                    // One on top of another, oldest first: each part's
+                    // time and length, a button to play it, and its words.
+                    ForEach(Array(recording.parts.enumerated()), id: \.element.id) { index, part in
+                        VStack(alignment: .leading, spacing: 6) {
+                            partHeader(part, number: index + 1)
+                            transcript(part, of: recording)
+                        }
+                    }
+                }
+            } header: {
+                sectionHeader("Transcript",
+                              copy: recording.transcript.isEmpty ? nil : recording.transcript)
             }
 
             // The summary: a plain card like the transcript's.
             if showsSummary(recording) {
-                Section("Summary") {
+                Section {
                     summarySection(recording)
+                } header: {
+                    sectionHeader("Summary", copy: recording.summary.flatMap {
+                        $0.isEmpty || model.intelligence.isSummarizing(id) ? nil : $0
+                    })
                 }
             }
 
             // The player is a card of its own under the summary, in the
-            // flow of the page rather than pinned to its foot.
+            // flow of the page rather than pinned to its foot. With several
+            // parts it plays them one after another.
             Section {
-                PlayerCard(player: player)
+                PlayerCard(player: player, caption: playerCaption(recording))
             }
 
             // Bare metadata, the way Photos prints a picture's: two columns
@@ -51,6 +74,9 @@ struct RecordingDetailView: View {
                            recording.createdAt.formatted(
                                .dateTime.day().month(.abbreviated).year().hour().minute()))
                     detail("Length", Format.duration(recording.duration))
+                    if recording.parts.count > 1 {
+                        detail("Parts", "\(recording.parts.count)")
+                    }
                     detail("Language", TranscriptionLanguage.name(for: recording.language))
                     if let modelID = recording.modelID {
                         detail("Model", model.models.displayName(for: modelID))
@@ -89,38 +115,70 @@ struct RecordingDetailView: View {
         .navigationTitle($title)
         .navigationBarTitleDisplayModeInline()
         .softScrollEdges()
+        // Room for the record button that floats over the foot of the
+        // screen, so the last lines can scroll clear of it.
+        .contentMargins(.bottom, FloatingRecordPane.buttonHeight
+                                 + FloatingRecordPane.buttonBottomPadding + 16,
+                        for: .scrollContent)
         .toolbar {
             // One menu. iOS 26 folds a second trailing item into an
             // overflow menu of its own anyway, so a separate share button
-            // only looked like one in the source.
+            // only looked like one in the source. Grouped: sending it
+            // somewhere, taking the text, doing the work again, and
+            // Delete on its own at the bottom.
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    ShareLink(item: shareText(recording)) {
-                        Label("Share Transcript", systemImage: "square.and.arrow.up")
-                    }
-                    ShareLink(item: model.library.audioURL(for: recording)) {
-                        Label("Share Audio", systemImage: "waveform")
-                    }
-                    .disabled(!player.isAvailable)
-                    Button("Copy Transcript", systemImage: "doc.on.doc") {
-                        copy(recording.transcript)
-                    }
-                    .disabled(recording.transcript.isEmpty)
-                    Button("Transcribe Again", systemImage: "arrow.clockwise") {
-                        Task { await model.capture.retranscribe(id) }
-                    }
-                    .disabled(model.capture.state.isBusy)
-                    if model.intelligence.availability.isAvailable {
-                        Button(recording.summary == nil ? "Summarize" : "Summarize Again",
-                               systemImage: "text.badge.star") {
-                            model.intelligence.summarize(id)
+                    Section {
+                        ShareLink(item: shareText(recording)) {
+                            Label("Share Transcript", systemImage: "square.and.arrow.up")
                         }
-                        .disabled(recording.transcript.isEmpty
-                                  || model.intelligence.isSummarizing(id))
+                        ShareLink(items: model.library.audioURLs(for: recording)) {
+                            Label("Share Audio", systemImage: "waveform")
+                        }
+                        .disabled(!player.isAvailable)
                     }
-                    Divider()
-                    Button("Delete", systemImage: "trash", role: .destructive) {
-                        confirmingDelete = true
+                    Section {
+                        Button("Copy Transcript", systemImage: Self.menuCopySymbol) {
+                            copy(recording.transcript)
+                        }
+                        .disabled(recording.transcript.isEmpty)
+                        Button("Copy Summary", systemImage: Self.menuCopySymbol) {
+                            copy(recording.summary ?? "")
+                        }
+                        .disabled((recording.summary ?? "").isEmpty)
+                    }
+                    Section {
+                        Button("Transcribe Again", systemImage: "arrow.clockwise") {
+                            Task { await model.capture.retranscribe(id) }
+                        }
+                        .disabled(model.capture.state.isBusy)
+                        if model.intelligence.availability.isAvailable {
+                            Button(recording.summary == nil ? "Summarize" : "Summarize Again",
+                                   systemImage: "text.badge.star") {
+                                model.intelligence.summarize(id)
+                            }
+                            .disabled(recording.transcript.isEmpty
+                                      || model.intelligence.isSummarizing(id))
+                        }
+                        // Undoes a merge, or takes back what was recorded
+                        // into it. Each part keeps its audio and words.
+                        if recording.parts.count > 1 {
+                            Button("Split into \(recording.parts.count) Recordings",
+                                   systemImage: "square.split.1x2") {
+                                player.stop()
+                                playingPart = nil
+                                model.library.split(id)
+                                if let first = model.library[id]?.parts.first {
+                                    load(first)
+                                }
+                            }
+                            .disabled(model.capture.state.isBusy)
+                        }
+                    }
+                    Section {
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            confirmingDelete = true
+                        }
                     }
                 } label: {
                     Label("More", systemImage: "ellipsis")
@@ -139,16 +197,28 @@ struct RecordingDetailView: View {
                 dismiss()
             }
         } message: {
-            Text("The audio and its transcript are removed from this phone.")
+            Text(recording.parts.count > 1
+                 ? "All \(recording.parts.count) parts, audio and transcripts, are removed from this phone."
+                 : "The audio and its transcript are removed from this phone.")
         }
         .onAppear {
             title = recording.displayTitle
-            player.load(model.library.audioURL(for: recording))
+            load(recording.parts[0])
             #if DEBUG
             if LaunchOptions.autoplay { player.play() }
             #endif
         }
         .onDisappear { player.stop() }
+        // One part played to its end: the next one follows, so several
+        // parts play as the one recording they are.
+        .onChange(of: player.isPlaying) { was, now in
+            guard was, !now, player.currentTime >= player.duration - 0.1,
+                  let current = model.library[id],
+                  let index = current.parts.firstIndex(where: { $0.id == playingPart }),
+                  index + 1 < current.parts.count else { return }
+            load(current.parts[index + 1])
+            player.play()
+        }
         .onChange(of: title) { _, newValue in
             // Only a name the user typed is stored; the derived one stays derived.
             guard newValue != recording.displayTitle || !recording.title.isEmpty else { return }
@@ -162,25 +232,105 @@ struct RecordingDetailView: View {
         }
         .overlay(alignment: .bottom) {
             if copied {
-                Toast("Copied", systemImage: "square.filled.on.square")
-                    .padding(.bottom, 16)
+                Toast("Copied", systemImage: Self.copySymbol)
+                    .padding(.bottom, ToastLayout.bottomInset(above: safeArea.bottom))
                     .transition(ToastLayout.transition)
             }
         }
     }
 
+    /// The mark copying has everywhere: the list's rows, the section
+    /// headers here, the menu and the toast.
+    static let copySymbol = "square.fill.on.square.fill"
+    /// The same mark in outline, for the menu, where every other item's
+    /// symbol is a line drawing.
+    static let menuCopySymbol = "square.on.square"
+
+    /// A section's name with a copy button at its trailing end, the same
+    /// small mark as on the list's rows. No button when there is nothing
+    /// to copy.
+    private func sectionHeader(_ name: LocalizedStringKey, copy text: String?) -> some View {
+        HStack {
+            Text(name)
+            Spacer()
+            if let text {
+                Button {
+                    copy(text)
+                } label: {
+                    Label { Text("Copy \(Text(name))") } icon: { Image(systemName: Self.copySymbol) }
+                }
+                .labelStyle(.iconOnly)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                // Off the card's edge a little, not flush with it.
+                .padding(.trailing, 4)
+            }
+        }
+    }
+
+    /// Above a part's words: when it was recorded, how long, and a button
+    /// that plays it from the top.
+    private func partHeader(_ part: RecordingPart, number: Int) -> some View {
+        let playing = playingPart == part.id && player.isPlaying
+        return HStack(spacing: 8) {
+            Text("\(number)")
+                .font(.caption2.weight(.semibold))
+                .monospacedDigit()
+                .frame(width: 18, height: 18)
+                .background(.quaternary, in: Circle())
+            Text(part.createdAt.formatted(.dateTime.hour().minute()))
+            Text("·").foregroundStyle(.tertiary)
+            Text(Format.duration(part.duration)).monospacedDigit()
+            Spacer()
+            Button(playing ? "Pause Part \(number)" : "Play Part \(number)",
+                   systemImage: playing ? "pause.circle.fill" : "play.circle.fill") {
+                if playingPart == part.id {
+                    player.toggle()
+                } else {
+                    load(part)
+                    player.play()
+                }
+            }
+            .labelStyle(.iconOnly)
+            .font(.title3)
+            .contentTransition(.symbolEffect(.replace))
+            .buttonStyle(.plain)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    /// With several parts, which one the player is on.
+    private func playerCaption(_ recording: Recording) -> String? {
+        guard recording.parts.count > 1,
+              let index = recording.parts.firstIndex(where: { $0.id == playingPart })
+        else { return nil }
+        return "Part \(index + 1) of \(recording.parts.count)"
+    }
+
+    /// Put a part's audio in the player, unless it is there already.
+    private func load(_ part: RecordingPart) {
+        guard playingPart != part.id else { return }
+        playingPart = part.id
+        player.load(model.library.audioURL(for: part))
+    }
+
     @ViewBuilder
-    private func transcript(_ recording: Recording) -> some View {
-        switch recording.status {
+    private func transcript(_ part: RecordingPart, of recording: Recording) -> some View {
+        switch part.status {
         case .transcribed:
-            if recording.segments.isEmpty {
-                Text(recording.transcript)
+            if part.segments.isEmpty {
+                Text(part.transcript)
                     .textSelection(.enabled)
                     .padding(.vertical, 4)
             } else {
-                SegmentedTranscript(segments: recording.segments,
-                                    currentTime: player.isPlaying || player.currentTime > 0
+                SegmentedTranscript(segments: part.segments,
+                                    currentTime: playingPart == part.id
+                                        && (player.isPlaying || player.currentTime > 0)
                                         ? player.currentTime : nil) { time in
+                    load(part)
                     guard player.isAvailable else { return }
                     player.seek(to: time)
                     if !player.isPlaying { player.play() }
@@ -257,9 +407,7 @@ struct RecordingDetailView: View {
     }
 
     private func fileSize(_ recording: Recording) -> Int64 {
-        let url = model.library.audioURL(for: recording)
-        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
-        return Int64(size ?? 0)
+        model.library.audioBytes(of: recording)
     }
 
     /// The place in Maps, pinned as "Recording".
@@ -492,11 +640,18 @@ private extension View {
 
 struct PlayerCard: View {
     @Bindable var player: AudioPlayerController
+    /// Above the scrubber, when there is something to say: which part.
+    var caption: String? = nil
     @State private var scrubbing = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            VStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 6) {
+                if let caption {
+                    Text(caption)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
                 Slider(value: $player.currentTime, in: 0...max(player.duration, 0.01)) { editing in
                     scrubbing = editing
                     if !editing { player.seek(to: player.currentTime) }

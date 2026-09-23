@@ -187,7 +187,7 @@ struct RecordView: View {
         case (_, .paused), (_, .interrupted): return "Paused"
         case (_, .transcribing): return "Transcribing"
         case (_, .failed): return "Recording"
-        default: return "Recording"
+        default: return capture.appendingTo == nil ? "Recording" : "Adding to Recording"
         }
     }
 

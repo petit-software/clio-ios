@@ -59,6 +59,29 @@ public final class IntelligenceController {
         summarize(id)
     }
 
+    /// The words under a recording changed — a part recorded into it, or
+    /// others merged with it — so what was written about them is written
+    /// again: when summaries are on, or when this one already had a summary
+    /// (asked for by hand, say). The old one stays until the new one lands.
+    public func resummarize(_ id: Recording.ID) {
+        guard let recording = library[id],
+              availability.isAvailable,
+              recording.status == .transcribed,
+              settings.settings.generateSummaries || recording.summary != nil,
+              SummaryPrompt.isWorthSummarizing(recording.transcript)
+        else { return }
+        // One already running is on the old words: this one follows it,
+        // and what it writes is what stays.
+        if let running = tasks[id] {
+            Task { [weak self] in
+                await running.value
+                self?.summarize(id)
+            }
+        } else {
+            summarize(id)
+        }
+    }
+
     /// On demand, from the detail view. Replaces whatever is there.
     @discardableResult
     public func summarize(_ id: Recording.ID) -> Task<Void, Never> {
