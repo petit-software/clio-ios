@@ -58,12 +58,20 @@ struct IntroView: View {
                             HStack(alignment: .center, spacing: 16) {
                                 point("Download a model",
                                       "Whisper Small, \(Format.bytes(whisperSmall.approximateBytes)), once.") {
-                                    Image(systemName: "arrow.down.circle")
+                                    Image("IntroModel")
+                                        .resizable()
+                                        .frame(width: Self.glyphSize, height: Self.glyphSize)
                                 }
                                 Spacer(minLength: 8)
                                 ModelActionSlot(entry: whisperSmall, manager: model.models,
                                                 isActive: model.capture.activeModel?.id == whisperSmall.id)
                                     .frame(width: ModelRow.slot, height: ModelRow.slot)
+                            }
+                            .padding(16)
+                            .background {
+                                let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                shape.fill(Color.secondary.opacity(0.08))
+                                    .overlay(shape.strokeBorder(Color.secondary.opacity(0.25), lineWidth: 0.5))
                             }
                         }
                     }
