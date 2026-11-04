@@ -507,13 +507,12 @@ struct RecordingRow: View {
     /// Wide enough for the widest of the three, which is the tick.
     static let actionWidth: CGFloat = 26
 
-    /// A green check for a transcript, an orange cross when nothing was
-    /// heard; nothing while it is pending or failed, which say so in words.
+    /// A green check for a transcript, an orange cross for none: nothing
+    /// heard, not transcribed yet, or failed. The words beside it say which.
     private var badge: (name: String, color: Color)? {
         switch recording.status {
         case .transcribed: ("text.badge.checkmark", .green)
-        case .nothingHeard: ("text.badge.xmark", .orange)
-        case .pending, .failed: nil
+        case .nothingHeard, .pending, .failed: ("text.badge.xmark", .orange)
         }
     }
 }
