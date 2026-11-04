@@ -108,9 +108,9 @@ struct SummaryModelSection: View {
             }
             Spacer(minLength: 8)
             if apple.isAvailable {
-                Image(systemName: selected ? "checkmark.circle.fill" : "checkmark.circle")
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.white)
                     .frame(width: ModelRow.slot, height: ModelRow.slot)
                     .accessibilityLabel(selected ? "Selected" : "Available")
             }
@@ -228,9 +228,9 @@ struct ModelRow: View {
             .accessibilityLabel("Cancel download")
             .accessibilityValue(detail)
         } else if installed != nil {
-            Image(systemName: isActive ? "checkmark.circle.fill" : "checkmark.circle")
+            Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
-                .foregroundStyle(.green)
+                .foregroundStyle(.white)
                 .accessibilityLabel(isActive ? "Selected" : "Installed")
         } else {
             Button(failure == nil ? "Download" : "Retry",
