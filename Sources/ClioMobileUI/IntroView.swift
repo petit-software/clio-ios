@@ -21,17 +21,17 @@ struct IntroView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 28) {
-                    AppHeader()
+                    AppHeader(hairline: true)
                         .padding(.top, 36)
                     Text("Record, transcribe, and summarize what matters.")
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 22) {
-                        point("waveform", "Record with ease",
+                        point("Record with ease",
                               "Capture thoughts, meetings, and conversations.")
-                        point("text.alignleft", "Turn speech into text",
+                        point("Turn speech into text",
                               "Get readable transcripts from your recordings.")
-                        point("sparkles", "Summarize your way",
+                        point("Summarize your way",
                               "Create summaries with your preferred format.")
                     }
                     .padding(.horizontal, 8)
@@ -76,18 +76,12 @@ struct IntroView: View {
         .interactiveDismissDisabled(!hasModel)
     }
 
-    private func point(_ symbol: String, _ title: LocalizedStringKey, _ text: LocalizedStringKey) -> some View {
-        HStack(alignment: .top, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .frame(width: 36)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline)
-                Text(text).font(.subheadline).foregroundStyle(.secondary)
-            }
+    private func point(_ title: LocalizedStringKey, _ text: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.headline)
+            Text(text).font(.subheadline).foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
