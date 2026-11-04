@@ -61,9 +61,12 @@ struct RecordingDetailView: View {
 
             // The player is a card of its own under the summary, in the
             // flow of the page rather than pinned to its foot. With several
-            // parts it plays them one after another.
-            Section {
-                PlayerCard(player: player, caption: playerCaption(recording))
+            // parts it plays them one after another. A recording nothing
+            // was heard in has nothing to play, and no card.
+            if recording.status != .nothingHeard {
+                Section {
+                    PlayerCard(player: player, caption: playerCaption(recording))
+                }
             }
 
             // Bare metadata, the way Photos prints a picture's: two columns
@@ -270,22 +273,24 @@ struct RecordingDetailView: View {
                 .frame(width: 18, height: 18)
                 .background(.quaternary, in: Circle())
             Text(part.createdAt.formatted(.dateTime.hour().minute()))
-            Text("·").foregroundStyle(.tertiary)
+            Text("·").fontWeight(.heavy)
             Text(Format.duration(part.duration)).monospacedDigit()
             Spacer()
-            Button(playing ? "Pause Part \(number)" : "Play Part \(number)",
-                   systemImage: playing ? "pause.circle.fill" : "play.circle.fill") {
-                if playingPart == part.id {
-                    player.toggle()
-                } else {
-                    load(part)
-                    player.play()
+            if part.status != .nothingHeard {
+                Button(playing ? "Pause Part \(number)" : "Play Part \(number)",
+                       systemImage: playing ? "pause.circle.fill" : "play.circle.fill") {
+                    if playingPart == part.id {
+                        player.toggle()
+                    } else {
+                        load(part)
+                        player.play()
+                    }
                 }
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .contentTransition(.symbolEffect(.replace))
+                .buttonStyle(.plain)
             }
-            .labelStyle(.iconOnly)
-            .font(.title3)
-            .contentTransition(.symbolEffect(.replace))
-            .buttonStyle(.plain)
         }
         .font(.caption)
         .foregroundStyle(.secondary)
