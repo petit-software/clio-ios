@@ -110,7 +110,7 @@ struct SummaryModelSection: View {
             if apple.isAvailable {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(selected ? Color.primary : Color.secondary)
                     .frame(width: ModelRow.slot, height: ModelRow.slot)
                     .accessibilityLabel(selected ? "Selected" : "Available")
             }
@@ -230,7 +230,7 @@ struct ModelRow: View {
         } else if installed != nil {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
-                .foregroundStyle(.primary)
+                .foregroundStyle(isActive ? Color.primary : Color.secondary)
                 .accessibilityLabel(isActive ? "Selected" : "Installed")
         } else {
             Button(failure == nil ? "Download" : "Retry",
@@ -239,7 +239,8 @@ struct ModelRow: View {
             }
             .labelStyle(.iconOnly)
             .font(.title2)
-            .foregroundStyle(.tint)
+            // The grey the list's copy icon has, not the tint.
+            .foregroundStyle(.secondary)
             .buttonStyle(.borderless)
         }
     }
