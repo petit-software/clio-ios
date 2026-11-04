@@ -68,11 +68,11 @@ struct IntroView: View {
                                     .frame(width: ModelRow.slot, height: ModelRow.slot)
                             }
                             .padding(16)
-                            .background {
-                                let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                shape.fill(Color.secondary.opacity(0.08))
-                                    .overlay(shape.strokeBorder(Color.secondary.opacity(0.25), lineWidth: 0.5))
-                            }
+                            .background(Color.secondary.opacity(0.08),
+                                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            // Out past the list's edges by its own inset, so
+                            // the glyph inside lines up with the ones above.
+                            .padding(.horizontal, -16)
                         }
                     }
                     .padding(.horizontal, 8)
