@@ -44,24 +44,28 @@ struct IntroView: View {
                                 .resizable()
                                 .frame(width: 24, height: 24)
                         }
-                    }
-                    .padding(.horizontal, 8)
-                    if let whisperSmall {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Download a model to start")
-                                .font(.headline)
-                            ModelRow(entry: whisperSmall, manager: model.models,
-                                     isActive: model.capture.activeModel?.id == whisperSmall.id,
-                                     busy: model.capture.state.isBusy) {}
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(Color.secondary.opacity(0.1),
-                                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            Text("Transcription runs on this phone. Audio and text never leave it.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                        point("Everything stays private on your device",
+                              "Audio, transcripts, and summaries never leave it.") {
+                            Image("IntroLock")
+                                .resizable()
+                                .frame(width: 24, height: 24)
+                        }
+                        // The one thing to do before the first recording,
+                        // with the Models page's own control at the end.
+                        if let whisperSmall {
+                            HStack(alignment: .center, spacing: 16) {
+                                point("Download a model",
+                                      "Whisper Small, \(Format.bytes(whisperSmall.approximateBytes)), once.") {
+                                    Image(systemName: "arrow.down.circle")
+                                }
+                                Spacer(minLength: 8)
+                                ModelActionSlot(entry: whisperSmall, manager: model.models,
+                                                isActive: model.capture.activeModel?.id == whisperSmall.id)
+                                    .frame(width: ModelRow.slot, height: ModelRow.slot)
+                            }
                         }
                     }
+                    .padding(.horizontal, 8)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 24)
