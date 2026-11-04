@@ -1,3 +1,5 @@
+import AppIntents
+import ClioMobileActivity
 import ClioMobileCore
 import SwiftUI
 
@@ -77,6 +79,14 @@ struct SettingsView: View {
                 } footer: {
                     Text("Titles and summaries, written on the phone by Apple Intelligence "
                          + "or a downloaded model, and how they read.")
+                }
+                Section {
+                    page("Siri & Action Button", value: "Record") {
+                        shortcutsSection
+                    }
+                } footer: {
+                    Text("Start a recording by voice, from the Shortcuts app, or with "
+                         + "the Action button.")
                 }
                 Section {
                     Picker("Appearance", selection: Binding(
@@ -356,6 +366,41 @@ struct SettingsView: View {
     /// What is on disk and how to get rid of it. Its own page: deleting
     /// every recording is not a thing anybody goes to About looking for,
     /// and neither are the sizes it used to sit under.
+    /// The one shortcut, and how to put it where the user wants it. The
+    /// tip and the link are Apple's own views; the Action button has no
+    /// URL an app may open, so that part is directions.
+    @ViewBuilder
+    private var shortcutsSection: some View {
+        #if os(iOS)
+        Section {
+            SiriTipView(intent: StartRecordingIntent())
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+        } footer: {
+            Text("Say it to Siri. Clio opens and starts recording.")
+        }
+        Section {
+            ShortcutsLink()
+                .shortcutsLinkStyle(.automaticOutline)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+        } footer: {
+            Text("\"Record\" is in the Shortcuts app under Clio, to run on its own "
+                 + "or inside a shortcut of your own.")
+        }
+        #endif
+        Section("Action button") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Open Settings ▸ Action Button, choose Shortcut, then Clio ▸ Record.")
+                Text("Pressing and holding the Action button then opens Clio and "
+                     + "starts recording. The phone asks for its unlock first.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private var storageSection: some View {
         Section {
             storageRow(.recordings,

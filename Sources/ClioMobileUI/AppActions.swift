@@ -1,5 +1,3 @@
-import AppIntents
-import ClioMobileActivity
 import Foundation
 import Observation
 
@@ -21,22 +19,4 @@ public final class AppActions {
     public var pending: Action?
 
     private init() {}
-}
-
-/// What Siri and Spotlight offer without setup. The phrases must name the
-/// app, which is what `applicationName` stands for. The intent itself is
-/// `StartRecordingIntent` in ClioMobileActivity, shared with the widget's
-/// control; this provider has to live in the app.
-public struct ClioShortcuts: AppShortcutsProvider {
-    public static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: StartRecordingIntent(),
-            phrases: [
-                "Record with \(.applicationName)",
-                "Start a \(.applicationName) recording",
-                "New \(.applicationName) recording",
-            ],
-            shortTitle: "Record",
-            systemImageName: "mic.fill")
-    }
 }

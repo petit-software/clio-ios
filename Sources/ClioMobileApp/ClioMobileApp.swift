@@ -1,3 +1,5 @@
+import AppIntents
+import ClioMobileActivity
 import ClioMobileCore
 import ClioMobileUI
 import SwiftUI
@@ -37,6 +39,14 @@ private struct MainActorBox<Value>: @unchecked Sendable {
 }
 #endif
 
+/// The record intent lives in ClioMobileActivity; the app names that
+/// package here or its metadata does not carry the intent. Its own type,
+/// not the `App`: that one is main-actor-isolated and the conformance
+/// may not be.
+struct ClioIntents: AppIntentsPackage {
+    static var includedPackages: [any AppIntentsPackage.Type] { [ClioMobileActivityIntents.self] }
+}
+
 @main
 struct ClioMobileApp: App {
     #if os(iOS)
@@ -58,6 +68,9 @@ struct ClioMobileApp: App {
         homeStyle = .default
         #endif
         _model = State(initialValue: model)
+        // Tells the system the shortcut's phrases, so Siri knows them
+        // before the user ever opens Shortcuts.
+        ClioShortcuts.updateAppShortcutParameters()
     }
 
     var body: some Scene {

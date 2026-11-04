@@ -39,3 +39,8 @@ public struct StartRecordingIntent: AppIntent {
         .result(opensIntent: OpenURLIntent(ClioLinks.record))
     }
 }
+
+/// The intents in this module, for the app and the widget extension to
+/// list: an App Intent in a package is found by the metadata extractor
+/// only when the bundle that ships it names the package.
+public struct ClioMobileActivityIntents: AppIntentsPackage {}

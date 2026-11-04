@@ -67,7 +67,8 @@ words, enforced by `SummaryPrompt.cleanTitle` whatever the model does.
   the core, the tests and every preview build without MLX.
 - **`ClioMobileUI`** — every view and `AppModel`, the wiring. A library so
   `#Preview` renders dependably.
-- **`ClioMobileApp`** — `@main`, the app delegate for background downloads.
+- **`ClioMobileApp`** — `@main`, the app delegate for background downloads,
+  and `ClioShortcuts`, the App Shortcuts provider, which has to be here.
 - **`ClioWidget`** (Xcode target) — the Live Activity and the
   `RecordControl` control. Links `ClioMobileActivity` only.
 
@@ -75,7 +76,7 @@ words, enforced by `SummaryPrompt.cleanTitle` whatever the model does.
 
 ```sh
 swift build                   # every library, on the host
-swift test                    # 130 tests, 23 suites, no network, under a second
+swift test                    # 134 tests, 23 suites, no network, under a second
 xcodegen generate             # Clio.xcodeproj from project.yml (not tracked)
 xcodebuild -project Clio.xcodeproj -scheme Clio \
   -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2' \
@@ -201,6 +202,19 @@ and every engine call that can raise goes through `ObjCException`.** The
 Mac app's every crash was a tap installed for a format a Bluetooth headset
 then changed.
 
+**The App Shortcuts provider has to be in the app target.** `ClioShortcuts`
+once lived in `ClioMobileUI`. It compiled, the intent reached the bundle's
+`Metadata.appintents`, and `autoShortcuts` in there was empty: no "Record
+with Clio" for Siri, Spotlight, the Shortcuts app or the Action button
+picker. The metadata extractor reads a provider only from the app itself.
+The intent stays in `ClioMobileActivity`, named through
+`ClioMobileActivityIntents: AppIntentsPackage`, which the app's
+`ClioIntents` includes. After a change here, read
+`Clio.app/Metadata.appintents/extract.actionsdata` and look for the
+shortcut before trusting the build. Settings ▸ Siri & Action Button shows
+the phrase (`SiriTipView`), opens the Shortcuts app (`ShortcutsLink`) and
+gives the Action button directions; no public URL opens that Settings page.
+
 **A control's intent runs in the widget extension.** It has no microphone,
 and iOS does not start capture from the background anyway. The intent
 opens `clio://record`; the app starts recording as it comes forward. Do not
@@ -245,7 +259,7 @@ the right numbers on both sides; write `Int64(…)` on the literal.
 
 Verified by something repeatable, as of this release candidate:
 
-- 131 unit tests on the host: the capture state machine on a simulated
+- 134 unit tests on the host: the capture state machine on a simulated
   microphone, including the row landing before the transcript, cancel and
   failure keeping the audio, the live preview appearing and vanishing, the
   whole capture reaching the engine; the gate keeping a quiet tail, a soft

@@ -553,8 +553,10 @@ Not verified, and worth knowing:
   construction. WhisperKit's are what Whisper's timestamp tokens say,
   which is usually within a few hundred milliseconds; whether a tap lands
   on the right word is a listening test.
-- **The intent from the Action button.** The intent and shortcut build;
-  Siri and the Action button need a device to try.
+- **The intent from the Action button.** The intent and shortcut build,
+  and since the provider moved into the app target the bundle's
+  metadata lists the shortcut; Siri and the Action button on a phone
+  are still a listening test.
 - **A real phone call.** The interruption path is proven on simulated
   events; whether `AVAudioEngine` restarts cleanly after a call on a
   device, and whether the gap in the buffer is where the call was, is a
