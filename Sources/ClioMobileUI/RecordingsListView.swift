@@ -248,7 +248,16 @@ struct RecordingsListView: View {
                     if model.models.installed.isEmpty {
                         Label("Pick your local model to start recording.", systemImage: "cube.fill")
                     } else {
-                        Label("No Recordings", systemImage: "waveform")
+                        // The mark, as on the intro: light grey, nothing else.
+                        Label {
+                            Text("No Recordings")
+                        } icon: {
+                            Image("IntroMark")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 44)
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 } actions: {
                     if model.models.installed.isEmpty {
