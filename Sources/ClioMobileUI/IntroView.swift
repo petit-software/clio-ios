@@ -13,6 +13,8 @@ struct IntroView: View {
 
     /// Any Whisper model on the phone will do; Small is the one offered.
     private var hasModel: Bool { !model.models.installed.isEmpty }
+    /// The points' glyphs: the given 24-point drawings, six points up.
+    static let glyphSize: CGFloat = 30
     private var whisperSmall: CatalogModel? {
         model.models.catalog.first { $0.id == ModelCatalog.defaultModelID }
     }
@@ -35,20 +37,20 @@ struct IntroView: View {
                               "Get readable transcripts from your recordings.") {
                             Image("IntroChat")
                                 .resizable()
-                                .frame(width: 24, height: 24)
+                                .frame(width: Self.glyphSize, height: Self.glyphSize)
                         }
                         point("Summarize your way",
                               "Create summaries with your preferred format.") {
                             // The thinking head, as given, from the catalog.
                             Image("IntroThink")
                                 .resizable()
-                                .frame(width: 24, height: 24)
+                                .frame(width: Self.glyphSize, height: Self.glyphSize)
                         }
                         point("Everything stays private on your device",
                               "Audio, transcripts, and summaries never leave it.") {
                             Image("IntroLock")
                                 .resizable()
-                                .frame(width: 24, height: 24)
+                                .frame(width: Self.glyphSize, height: Self.glyphSize)
                         }
                         // The one thing to do before the first recording,
                         // with the Models page's own control at the end.
@@ -95,9 +97,9 @@ struct IntroView: View {
                                     @ViewBuilder glyph: () -> Glyph) -> some View {
         HStack(alignment: .top, spacing: 16) {
             glyph()
-                .font(.title2)
+                .font(.system(size: Self.glyphSize - 2))
                 .foregroundStyle(.tint)
-                .frame(width: 36, height: 28)
+                .frame(width: Self.glyphSize + 12, height: Self.glyphSize + 4)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.headline)
@@ -111,6 +113,8 @@ struct IntroView: View {
 /// ring's stroke a twelfth of the box, the dot a third of it. Drawn, not
 /// an asset, so it takes the tint like the symbols beside it.
 struct RecordGlyph: View {
+    var size: CGFloat = IntroView.glyphSize
+
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
@@ -123,7 +127,7 @@ struct RecordGlyph: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(width: 24, height: 24)
+        .frame(width: size, height: size)
     }
 }
 
