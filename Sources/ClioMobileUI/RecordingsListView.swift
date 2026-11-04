@@ -9,10 +9,13 @@ import BlurSwiftUI
 /// `CLIO_HOME=floating` at launch.
 /// The app's colour, taken from the icon: a lime that the icon's gradient
 /// ends in at the bottom, the olive from its middle for a word on white,
-/// and the near-black from its top for a word on the lime.
+/// and the near-black from its top for a word on the lime. The catalog's
+/// `AccentColor` is the lime on dark and the same lime brought down to 42%
+/// lightness (#9ACD0A) on light; these three are for the surfaces that stay
+/// lime in both appearances.
 enum Accent {
     /// The bright green at the foot of the icon.
-    static let lime = Color(red: 0.831, green: 0.984, blue: 0.475)  // #D4FB79, the accent
+    static let lime = Color(red: 0.831, green: 0.984, blue: 0.475)  // #D4FB79; the accent in dark mode
     /// The olive halfway up the icon, dark enough to read on white.
     static let olive = Color(red: 0.376, green: 0.447, blue: 0.216)
     /// The near-black at the top of the icon, for a word on the lime.

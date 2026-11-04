@@ -305,6 +305,20 @@ near-black glass with the lime word in dark mode; the pane is lime with
 the ink word in both. The record sheet's Stop button keeps its red: that
 is a stop, not the app's colour.
 
+The catalog's `AccentColor`, the tint of every toggle, checkmark, progress
+ring and tinted word, is the lime on dark and the same lime brought down
+to 42% lightness, #9ACD0A, on light. The lime itself is 1.2:1 on white, so
+a tinted glyph vanished in light mode. Two darker shades were tried and
+rejected: the olive, #607237, reads on white but is another colour, its
+saturation a third of the lime's; and #597B0A, the lime's hue and
+saturation at 26% lightness, which passes as text (4.9:1) but is olive
+to the eye all the same — a lime dark enough for text is no longer lime.
+#9ACD0A keeps the hue (76°) and saturation (91%), is 2.1:1 on white, the
+contrast Apple's own green toggle has, and stays the brand colour; a
+tinted word in a Form is faint, and that is the trade taken. The
+surfaces that are lime with the ink word on them stay lime in both
+appearances.
+
 Settings ▸ Recording ▸ "Include location": with it on, a recording is
 asked for one Core Location fix as it starts — the first within eight
 seconds, reverse-geocoded to street and town — and lands with it; the
