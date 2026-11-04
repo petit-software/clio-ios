@@ -162,11 +162,12 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
         }
         meter.reset()
 
-        try configureSession()
-
-        // The engine takes a few hundred milliseconds to reach the hardware.
-        // Off the main actor, so the record screen is already up while it does.
+        // The session and the engine both take a moment to reach the
+        // hardware, and activating the session blocks — Xcode flags it as
+        // a hang risk on the main thread. Both off the main actor, so the
+        // record screen is already up while they do.
         try await Task.detached(priority: .userInitiated) { [self] in
+            try configureSession()
             do {
                 try installTap(on: engine.inputNode)
             } catch {
@@ -440,6 +441,7 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
     /// stays installed; the buffer keeps its place.
     private func restartEngine() -> Bool {
         #if os(iOS)
+        // On the notification's thread, not the main one.
         try? AVAudioSession.sharedInstance().setActive(true)
         #endif
         var startError: (any Error)?

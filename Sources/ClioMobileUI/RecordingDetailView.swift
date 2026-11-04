@@ -400,8 +400,7 @@ struct RecordingDetailView: View {
 
     private func transcribeAgain(_ message: String) -> some View {
         let recording = model.library[id]
-        return
-        VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 12) {
             Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
             if let recording, model.capture.isTranscribing(recording) {
