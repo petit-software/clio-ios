@@ -1,4 +1,5 @@
 import AppIntents
+import ClioMobileActivity
 import Foundation
 import Observation
 
@@ -22,24 +23,10 @@ public final class AppActions {
     private init() {}
 }
 
-/// "Record with Clio." Opens the app straight onto the record screen, so
-/// the Action button can start a memo without a tap in between.
-public struct StartRecordingIntent: AppIntent {
-    public static let title: LocalizedStringResource = "Start Recording"
-    public static let description = IntentDescription("Starts a new recording in Clio.")
-    public static let openAppWhenRun = true
-
-    public init() {}
-
-    @MainActor
-    public func perform() async throws -> some IntentResult {
-        AppActions.shared.pending = .record
-        return .result()
-    }
-}
-
 /// What Siri and Spotlight offer without setup. The phrases must name the
-/// app, which is what `applicationName` stands for.
+/// app, which is what `applicationName` stands for. The intent itself is
+/// `StartRecordingIntent` in ClioMobileActivity, shared with the widget's
+/// control; this provider has to live in the app.
 public struct ClioShortcuts: AppShortcutsProvider {
     public static var appShortcuts: [AppShortcut] {
         AppShortcut(

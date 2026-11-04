@@ -1,3 +1,4 @@
+import ClioMobileActivity
 import ClioMobileCore
 import SwiftUI
 
@@ -75,9 +76,16 @@ public struct RootView: View {
                 // the hold button has been let go of, and this says what
                 // the wait is. The same pill either way, at the bottom,
                 // above the record button; it fades and shrinks in place.
+                // The X stops the transcription. The recording stays, with
+                // its audio, as "Not transcribed yet" — Transcribe Again is
+                // on it — so nothing is lost by stopping.
                 .overlay(alignment: .bottom) {
                     if model.capture.state == .transcribing {
-                        Toast("Transcribing") { ProgressView() }
+                        Toast("Transcribing",
+                              onCancel: { Task { await model.capture.cancel() } },
+                              cancelLabel: "Stop transcribing") {
+                            ProgressView()
+                        }
                             .padding(.bottom, ToastLayout.bottomInset(above: proxy.safeAreaInsets.bottom))
                             .transition(ToastLayout.transition)
                     }
@@ -172,6 +180,11 @@ public struct RootView: View {
         }
         .onChange(of: model.capture.state, initial: true) { _, state in
             activity.update(for: state, maxSeconds: model.capture.maxSeconds)
+        }
+        // clio://record, from the intent — Siri, the Action button, the
+        // Lock Screen control. One route in, however the ask arrived.
+        .onOpenURL { url in
+            if ClioLinks.isRecord(url) { AppActions.shared.pending = .record }
         }
         .onChange(of: AppActions.shared.pending, initial: true) { _, action in
             guard let action else { return }

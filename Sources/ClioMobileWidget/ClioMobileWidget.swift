@@ -1,15 +1,37 @@
 import ActivityKit
+import AppIntents
 import ClioMobileActivity
 import SwiftUI
 import WidgetKit
 
 /// The recording, on the Lock Screen and in the Dynamic Island while the
-/// app is in the background. A running clock and a red dot; tapping it
-/// opens the app, where the stop button is.
+/// app is in the background — and a control that starts one.
 @main
 struct ClioMobileWidgetBundle: WidgetBundle {
     var body: some Widget {
         RecordingActivity()
+        RecordControl()
+    }
+}
+
+/// A button for the Lock Screen, Control Center and the Action button:
+/// "Record". It runs `StartRecordingIntent`, which opens the app on its
+/// record URL; the app starts the microphone as it comes forward. The
+/// control cannot record on its own — the extension has no microphone and
+/// iOS does not start capture from the background — so the label says
+/// what it does: open Clio to record. A locked phone asks for its unlock
+/// first, as it does for any control that opens an app.
+struct RecordControl: ControlWidget {
+    static let kind = "com.bartbak.clio.ios.record"
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: Self.kind) {
+            ControlWidgetButton(action: StartRecordingIntent()) {
+                Label("Record", systemImage: "mic.fill")
+            }
+        }
+        .displayName("Record with Clio")
+        .description("Opens Clio and starts a new recording.")
     }
 }
 

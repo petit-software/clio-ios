@@ -614,11 +614,18 @@ enum ToastLayout {
 struct Toast<Icon: View>: View {
     let title: LocalizedStringKey
     let icon: Icon
+    /// With one, an X at the trailing end that stops what the toast is
+    /// about — the transcription, say. Without, the toast is a note only.
+    var onCancel: (() -> Void)?
+    var cancelLabel: LocalizedStringKey = "Cancel"
     @Environment(\.colorScheme) private var colorScheme
 
-    init(_ title: LocalizedStringKey, @ViewBuilder icon: () -> Icon) {
+    init(_ title: LocalizedStringKey, onCancel: (() -> Void)? = nil,
+         cancelLabel: LocalizedStringKey = "Cancel", @ViewBuilder icon: () -> Icon) {
         self.title = title
         self.icon = icon()
+        self.onCancel = onCancel
+        self.cancelLabel = cancelLabel
     }
 
     init(_ title: LocalizedStringKey, systemImage: String) where Icon == Image {
@@ -626,18 +633,32 @@ struct Toast<Icon: View>: View {
         self.icon = Image(systemName: systemImage)
     }
 
-
     var body: some View {
         let dark = colorScheme == .dark
-        Label { Text(title) } icon: { icon }
-            .font(.callout.weight(.semibold))
-            .foregroundStyle(dark ? Color.black : Color.white)
-            // A spinner as the icon takes the tint, not the foreground.
-            .tint(dark ? Color.black : Color.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .invertedGlass(dark: dark)
-            .accessibilityAddTraits(.isStaticText)
+        let foreground = dark ? Color.black : Color.white
+        HStack(spacing: 12) {
+            Label { Text(title) } icon: { icon }
+                .accessibilityAddTraits(.isStaticText)
+            if let onCancel {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.bold))
+                        .frame(width: 24, height: 24)
+                        .background(foreground.opacity(0.15), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(cancelLabel)
+            }
+        }
+        .font(.callout.weight(.semibold))
+        .foregroundStyle(foreground)
+        // A spinner as the icon takes the tint, not the foreground.
+        .tint(foreground)
+        .padding(.leading, 16)
+        .padding(.trailing, onCancel == nil ? 16 : 10)
+        .padding(.vertical, onCancel == nil ? 10 : 8)
+        .invertedGlass(dark: dark)
     }
 }
 
