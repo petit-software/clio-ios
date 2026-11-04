@@ -37,7 +37,10 @@ struct IntroView: View {
                         }
                         point("Summarize your way",
                               "Create summaries with your preferred format.") {
-                            Image(systemName: "sparkles")
+                            // The thinking head, as given, from the catalog.
+                            Image("IntroThink")
+                                .resizable()
+                                .frame(width: 24, height: 24)
                         }
                     }
                     .padding(.horizontal, 8)
