@@ -167,7 +167,7 @@ struct ModelRow: View {
             Spacer(minLength: 8)
             // One slot at the far right, the same size in every state, so
             // the rows line up and keep their height as a download runs.
-            trailing
+            ModelActionSlot(entry: entry, manager: manager, isActive: isActive)
                 .frame(width: Self.slot, height: Self.slot)
         }
         .contentShape(Rectangle())
@@ -212,12 +212,22 @@ struct ModelRow: View {
     }
 
     static let slot: CGFloat = 28
+}
 
-    /// What sits in the slot: an arrow in the app's colour to download, a
-    /// small ring while it comes down (tap to cancel), a green check once it is here —
-    /// filled for the one in use, outlined for the rest.
-    @ViewBuilder
-    private var trailing: some View {
+/// What sits in a model row's slot: an arrow in the app's colour to
+/// download, a small ring while it comes down (tap to cancel), a check once
+/// it is here — filled for the one in use, outlined for the rest. Its own
+/// view so the intro can put the same control beside its own words.
+struct ModelActionSlot: View {
+    let entry: CatalogModel
+    let manager: ModelManager
+    var isActive: Bool
+
+    private var installed: InstalledModel? { manager.installedModel(id: entry.id) }
+    private var progress: DownloadProgress? { manager.downloads[entry.id] }
+    private var failure: String? { manager.failures[entry.id] }
+
+    var body: some View {
         if let progress {
             Button {
                 manager.cancel(entry.id)
@@ -226,7 +236,7 @@ struct ModelRow: View {
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Cancel download")
-            .accessibilityValue(detail)
+            .accessibilityValue("\(Int(progress.fraction * 100))%")
         } else if installed != nil {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
