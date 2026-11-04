@@ -22,6 +22,57 @@ public struct DownloadProgress: Sendable, Equatable {
     }
 }
 
+/// How one kind of model is laid out on Hugging Face and recognised on
+/// disk. The manager is the same for both; this is the part that differs.
+public enum ModelLayout: Sendable, Equatable {
+    /// WhisperKit: a folder of compiled Core ML models under `<repo>/<id>`,
+    /// with the tokenizer from the matching openai repo in a subfolder.
+    case whisper
+    /// An MLX language model: `config.json`, the safetensors and the
+    /// tokenizer at the root of a repo of its own.
+    case languageModel
+
+    /// The models this kind offers.
+    public func catalog() -> [CatalogModel] {
+        switch self {
+        case .whisper: ModelCatalog.load()
+        case .languageModel: LanguageModelCatalog.builtIn
+        }
+    }
+
+    /// Whether a folder with these entries is a complete model. What makes
+    /// a half-finished download not count as installed.
+    func isInstalled(contents: [String]) -> Bool {
+        switch self {
+        case .whisper:
+            return contents.contains { $0.hasSuffix(".mlmodelc") }
+        case .languageModel:
+            return contents.contains("config.json")
+                && contents.contains { $0.hasSuffix(".safetensors") }
+        }
+    }
+
+    /// The path inside the repo to list for a model.
+    func remotePath(for model: CatalogModel) -> String {
+        switch self {
+        case .whisper: model.id
+        case .languageModel: ""
+        }
+    }
+
+    /// Where a listed file goes inside the model's folder. Whisper's
+    /// listing paths start with the model id, which would nest the folder
+    /// twice; a language model's are already relative to the root.
+    func relativePath(_ path: String, for model: CatalogModel) -> String {
+        switch self {
+        case .whisper:
+            return path.hasPrefix(model.id + "/") ? String(path.dropFirst(model.id.count + 1)) : path
+        case .languageModel:
+            return path
+        }
+    }
+}
+
 /// The model catalog, what's installed, and moving between the two.
 ///
 /// Installed models are discovered from disk rather than tracked in settings:
@@ -45,6 +96,9 @@ public final class ModelManager {
     /// something that exists.
     public var onInstalledChanged: (() -> Void)?
 
+    /// Which kind of model this manager keeps. One manager per kind, each
+    /// on a directory of its own.
+    public let layout: ModelLayout
     private let transport: any ModelTransport
     private let modelsDirectory: URL
     private var tasks: [String: Task<Void, Never>] = [:]
@@ -53,11 +107,20 @@ public final class ModelManager {
     private var isSimulated = false
 
     public init(transport: any ModelTransport = HuggingFaceTransport(),
-                modelsDirectory: URL = AppPaths.modelsDirectory) {
+                modelsDirectory: URL = AppPaths.modelsDirectory,
+                layout: ModelLayout = .whisper) {
         self.transport = transport
         self.modelsDirectory = modelsDirectory
-        self.catalog = ModelCatalog.load()
+        self.layout = layout
+        self.catalog = layout.catalog()
         refreshInstalled()
+    }
+
+    /// The manager for the language models, on their own directory.
+    public static func languageModels(transport: any ModelTransport = HuggingFaceTransport())
+        -> ModelManager {
+        ModelManager(transport: transport, modelsDirectory: AppPaths.languageModelsDirectory,
+                     layout: .languageModel)
     }
 
     /// For previews and tests: a manager with fixed state that does no disk
@@ -65,16 +128,18 @@ public final class ModelManager {
     /// models directory, which in a preview would show whatever this machine
     /// happens to have downloaded.
     public static func simulating(
-        catalog: [CatalogModel] = ModelCatalog.builtIn,
+        catalog: [CatalogModel]? = nil,
         installed: [InstalledModel] = [],
         downloads: [String: DownloadProgress] = [:],
-        failures: [String: String] = [:]
+        failures: [String: String] = [:],
+        layout: ModelLayout = .whisper
     ) -> ModelManager {
         let manager = ModelManager(
             transport: HuggingFaceTransport(),
-            modelsDirectory: URL(fileURLWithPath: "/nonexistent-preview"))
+            modelsDirectory: URL(fileURLWithPath: "/nonexistent-preview"),
+            layout: layout)
         manager.isSimulated = true
-        manager.catalog = catalog
+        manager.catalog = catalog ?? (layout == .whisper ? ModelCatalog.builtIn : LanguageModelCatalog.builtIn)
         manager.installed = installed
         manager.downloads = downloads
         manager.failures = failures
@@ -85,7 +150,7 @@ public final class ModelManager {
     /// on the stub engine. The URL points nowhere; the stub does not look.
     public static func simulatedInstalled(_ id: String = ModelCatalog.defaultModelID)
         -> InstalledModel {
-        let catalog = ModelCatalog.builtIn.first { $0.id == id }
+        let catalog = (ModelCatalog.builtIn + LanguageModelCatalog.builtIn).first { $0.id == id }
         return InstalledModel(
             id: id,
             displayName: catalog?.displayName ?? id,
@@ -97,7 +162,7 @@ public final class ModelManager {
 
     public func refreshInstalled() {
         guard !isSimulated else { return }
-        let found = Self.modelDirectories(in: modelsDirectory).map { url in
+        let found = Self.modelDirectories(in: modelsDirectory, layout: layout).map { url in
             let id = url.lastPathComponent
             return InstalledModel(id: id,
                                   displayName: displayName(for: id),
@@ -124,9 +189,10 @@ public final class ModelManager {
         installed.reduce(0) { $0 + $1.sizeBytes }
     }
 
-    /// A model folder is one containing at least one compiled Core ML model.
-    /// That is also what makes a half-finished download not count as installed.
-    static func modelDirectories(in root: URL) -> [URL] {
+    /// A model folder is one the layout recognises as complete — a compiled
+    /// Core ML model inside, or a config with its weights. That is also
+    /// what makes a half-finished download not count as installed.
+    static func modelDirectories(in root: URL, layout: ModelLayout = .whisper) -> [URL] {
         let manager = FileManager.default
         guard let entries = try? manager.contentsOfDirectory(
             at: root, includingPropertiesForKeys: [.isDirectoryKey])
@@ -138,7 +204,7 @@ public final class ModelManager {
             guard manager.fileExists(atPath: url.path, isDirectory: &isDirectory),
                   isDirectory.boolValue else { return false }
             let contents = (try? manager.contentsOfDirectory(atPath: url.path)) ?? []
-            return contents.contains { $0.hasSuffix(".mlmodelc") }
+            return layout.isInstalled(contents: contents)
         }
     }
 
@@ -216,7 +282,7 @@ public final class ModelManager {
         defer { tasks[model.id] = nil }
 
         do {
-            var files = try await transport.list(repo: model.repo, path: model.id)
+            var files = try await transport.list(repo: model.repo, path: layout.remotePath(for: model))
                 .map { (file: $0, subdirectory: String?.none) }
 
             if let tokenizerRepo = model.tokenizerRepo {
@@ -248,10 +314,9 @@ public final class ModelManager {
                 try Task.checkCancellation()
                 let file = entry.file
 
-                // Paths in the listing are repo-relative and start with the
-                // model id; strip it so the folder is not nested twice.
-                let relative = file.path.hasPrefix(model.id + "/")
-                    ? String(file.path.dropFirst(model.id.count + 1))
+                // Where the file goes inside the folder: see the layout.
+                let relative = entry.subdirectory == nil
+                    ? layout.relativePath(file.path, for: model)
                     : file.path
                 let destination = entry.subdirectory
                     .map { destinationRoot.appendingPathComponent($0)

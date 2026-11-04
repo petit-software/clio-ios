@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- A downloaded language model is a gigabyte of weights plus its
+	     working room. iOS lets an ordinary app have about half the phone's
+	     memory before it is killed; with this it may have more on phones
+	     that have more. Granted to any team by automatic signing; it does
+	     nothing on a phone whose memory is the limit anyway. -->
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
+</dict>
+</plist>

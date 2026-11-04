@@ -42,6 +42,17 @@ struct SettingsAdditionsTests {
         #expect(SummaryPreferences(instructions: " \n ").trimmedInstructions == nil)
     }
 
+    @Test("The summary model choice defaults to Apple's and round-trips a downloaded one")
+    func summaryModel() throws {
+        #expect(Settings().summaryModel == .apple)
+        var settings = Settings()
+        settings.summaryModel = .local(id: "Qwen3-1.7B-4bit")
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).summaryModel == .local(id: "Qwen3-1.7B-4bit"))
+        let odd = try JSONDecoder().decode(Settings.self, from: Data(#"{"summaryModel":"cloud"}"#.utf8))
+        #expect(odd.summaryModel == .apple, "an unknown value is the default")
+    }
+
     @Test("A prompt written before the preferences becomes the user's additions")
     func legacyInstructionsMigrate() throws {
         let old = try JSONDecoder().decode(

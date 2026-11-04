@@ -18,7 +18,11 @@ struct ModelSection: View {
     var body: some View {
         Section {
             ForEach(model.models.catalog) { entry in
-                ModelRow(entry: entry)
+                ModelRow(entry: entry, manager: model.models,
+                         isActive: model.capture.activeModel?.id == entry.id,
+                         busy: model.capture.state.isBusy) {
+                    model.select(model: entry.id)
+                }
             }
             Toggle("Keep model in memory", isOn: Binding(
                 get: { model.settings.settings.keepModelInMemory },
@@ -45,16 +49,26 @@ struct ModelSection: View {
     }
 }
 
-private struct ModelRow: View {
-    @Environment(AppModel.self) private var model
+/// One catalog row, for either kind of model: the Whisper models on the
+/// Model page, the language models on the Intelligence page. The manager
+/// says what state it is in; the caller says whether it is the one in use
+/// and what a tap on an installed row does.
+struct ModelRow: View {
     let entry: CatalogModel
+    let manager: ModelManager
+    var isActive: Bool
+    /// Deleting is refused while a recording or transcription is running.
+    var busy = false
+    /// Why this phone cannot use the model, if it cannot. Shown on the
+    /// row; the download is still offered, since the memory a model needs
+    /// changes with what else is running.
+    var unsupported: String? = nil
+    var onSelect: () -> Void
     @State private var confirmingDelete = false
 
-    private var manager: ModelManager { model.models }
     private var installed: InstalledModel? { manager.installedModel(id: entry.id) }
     private var progress: DownloadProgress? { manager.downloads[entry.id] }
     private var failure: String? { manager.failures[entry.id] }
-    private var isActive: Bool { model.capture.activeModel?.id == entry.id }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -69,6 +83,11 @@ private struct ModelRow: View {
                         .font(.footnote)
                         .foregroundStyle(.orange)
                 }
+                if let unsupported {
+                    Text(unsupported)
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                }
             }
             Spacer(minLength: 8)
             // One slot at the far right, the same size in every state, so
@@ -78,14 +97,14 @@ private struct ModelRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if installed != nil { model.select(model: entry.id) }
+            if installed != nil { onSelect() }
         }
         .contextMenu {
             if installed != nil {
                 Button("Delete Model", systemImage: "trash", role: .destructive) {
                     confirmingDelete = true
                 }
-                .disabled(model.capture.state.isBusy)
+                .disabled(busy)
             }
         }
         .accessibilityElement(children: .combine)
@@ -113,6 +132,11 @@ private struct ModelRow: View {
         }
         var parts = ["\(Format.bytes(entry.approximateBytes))", entry.languages.label,
                      entry.tier.label]
+        if let memory = entry.memoryBytes {
+            let formatter = ByteCountFormatter()
+            formatter.countStyle = .memory
+            parts.append("needs about \(formatter.string(fromByteCount: memory)) of memory")
+        }
         if let note = entry.note { parts.append(note) }
         return parts.joined(separator: " · ")
     }

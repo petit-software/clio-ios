@@ -87,8 +87,8 @@ struct SettingsView: View {
                         intelligenceSection(store)
                     }
                 } footer: {
-                    Text("Titles and summaries from the language model built into iOS, "
-                         + "on the phone.")
+                    Text("Titles and summaries, written on the phone by Apple Intelligence "
+                         + "or a downloaded model, and how they read.")
                 }
                 Section {
                     page("Storage", value: Format.bytes(onThisPhone)) {
@@ -176,7 +176,11 @@ struct SettingsView: View {
 
     private func intelligenceSummary(_ store: SettingsStore) -> String {
         guard model.intelligence.availability.isAvailable else { return "Unavailable" }
-        return store.settings.generateSummaries ? "On" : "Off"
+        guard store.settings.generateSummaries else { return "Off" }
+        switch store.settings.summaryModel {
+        case .apple: return "Apple Intelligence"
+        case .local(let id): return model.languageModels.displayName(for: id)
+        }
     }
 
     // MARK: Sections
@@ -299,12 +303,12 @@ struct SettingsView: View {
             }
         } footer: {
             Text(availability.isAvailable
-                 ? "After each transcription the on-device language model writes a "
+                 ? "After each transcription a language model on this phone writes a "
                    + "title and a summary. The transcript never leaves the phone."
-                 : "Needs iOS 26 and Apple Intelligence. When it is on, the language "
-                   + "model built into iOS writes a title and a summary for each "
-                   + "recording, on the phone.")
+                 : "A title and a summary for each recording, written on the phone by "
+                   + "Apple Intelligence or by a model downloaded below.")
         }
+        summaryModelSection(store)
         // How the summary reads. Read by every path that writes one — the
         // first summary and Summarize Again alike — at the moment it runs.
         Section {
@@ -338,6 +342,64 @@ struct SettingsView: View {
         }
     }
 
+    /// Which model writes the summaries: Apple's, where the phone has it,
+    /// or one downloaded here. Each language model is a catalog row like
+    /// the Whisper ones, with its size, the memory it needs, and whether
+    /// this phone can run it.
+    private func summaryModelSection(_ store: SettingsStore) -> some View {
+        let choice = store.settings.summaryModel
+        let device = model.summaries.deviceSupport
+        return Section {
+            appleRow(store, selected: choice == .apple)
+            ForEach(model.languageModels.catalog) { entry in
+                ModelRow(entry: entry, manager: model.languageModels,
+                         isActive: choice == .local(id: entry.id),
+                         busy: model.intelligence.inProgress.isEmpty == false,
+                         unsupported: model.summaries.support(for: entry).reason) {
+                    model.select(summaryModel: .local(id: entry.id))
+                }
+            }
+        } header: {
+            Text("Model")
+        } footer: {
+            Text(device.isSupported
+                 ? "Downloaded once from Hugging Face, then run on this phone's GPU. "
+                   + "A model is loaded for each summary and released after. Nothing "
+                   + "you record is ever uploaded."
+                 : (device.reason ?? "") + " Apple Intelligence is the only option here.")
+        }
+    }
+
+    /// Apple's model as a row: a tap picks it when it is there, the reason
+    /// when it is not.
+    private func appleRow(_ store: SettingsStore, selected: Bool) -> some View {
+        let apple = model.summaries.appleAvailability
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Apple Intelligence")
+                Text(apple.isAvailable
+                     ? "Built into iOS 26. Nothing to download."
+                     : apple.reason ?? "Not available on this phone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if apple.isAvailable {
+                Image(systemName: selected ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                    .frame(width: ModelRow.slot, height: ModelRow.slot)
+                    .accessibilityLabel(selected ? "Selected" : "Available")
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if apple.isAvailable { model.select(summaryModel: .apple) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(apple.isAvailable ? .isButton : [])
+    }
+
     /// What is on disk and how to get rid of it. Its own page: deleting
     /// every recording is not a thing anybody goes to About looking for,
     /// and neither are the sizes it used to sit under.
@@ -347,8 +409,9 @@ struct SettingsView: View {
                        "\(model.library.recordings.count) · \(Format.bytes(model.library.audioBytes))",
                        enabled: !model.library.recordings.isEmpty)
             storageRow(.models,
-                       "\(model.models.installed.count) · \(Format.bytes(model.models.installedBytes))",
-                       enabled: !model.models.installed.isEmpty)
+                       "\(model.models.installed.count + model.languageModels.installed.count) · "
+                       + Format.bytes(model.models.installedBytes + model.languageModels.installedBytes),
+                       enabled: !(model.models.installed.isEmpty && model.languageModels.installed.isEmpty))
             storageRow(.everything, Format.bytes(onThisPhone), enabled: !nothingToDelete)
             if let error = model.settings.lastSaveError ?? model.library.lastSaveError {
                 Label(error, systemImage: "exclamationmark.triangle")
@@ -429,8 +492,9 @@ struct SettingsView: View {
             case .recordings:
                 "The audio and the transcripts, \(size) in all. This cannot be undone."
             case .models:
-                "\(size) of downloaded models. Nothing is transcribed until one is "
-                + "downloaded again; your recordings are kept."
+                "\(size) of downloaded models, Whisper and language models alike. Nothing "
+                + "is transcribed or summarized until one is downloaded again; your "
+                + "recordings are kept."
             case .everything:
                 "Every recording and every downloaded model, \(size) in all. Your "
                 + "settings are kept. This cannot be undone."
@@ -445,7 +509,7 @@ struct SettingsView: View {
     private func size(of scope: DeleteScope) -> Int64 {
         switch scope {
         case .recordings: model.library.audioBytes
-        case .models: model.models.installedBytes
+        case .models: model.models.installedBytes + model.languageModels.installedBytes
         case .everything: onThisPhone
         }
     }
@@ -464,23 +528,26 @@ struct SettingsView: View {
     }
 
     private var onThisPhone: Int64 {
-        model.library.audioBytes + model.models.installedBytes
+        model.library.audioBytes + model.models.installedBytes + model.languageModels.installedBytes
     }
 
     private var nothingToDelete: Bool {
         model.library.recordings.isEmpty && model.models.installed.isEmpty
+            && model.languageModels.installed.isEmpty
     }
 
     /// Every model in Clio's own folder. A model that will not go is
     /// reported rather than swallowed: the row would otherwise stay on
     /// screen with no explanation.
     private func deleteInstalledModels() {
-        for installed in model.models.installed {
-            do {
-                try model.models.delete(installed)
-            } catch {
-                deleteError = error.localizedDescription
-                return
+        for manager in [model.models, model.languageModels] {
+            for installed in manager.installed {
+                do {
+                    try manager.delete(installed)
+                } catch {
+                    deleteError = error.localizedDescription
+                    return
+                }
             }
         }
     }

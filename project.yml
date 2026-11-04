@@ -36,6 +36,8 @@ targets:
       - path: Resources/Assets.xcassets
       - path: Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
+      - path: Resources/Clio.entitlements
+        buildPhase: none
       - path: Resources/Info.plist
         buildPhase: none
       # Visible in the navigator, built through the package.
@@ -74,6 +76,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Resources/Info.plist
+        # One entitlement: the increased memory limit, so a downloaded
+        # language model has room on a phone that has it. See
+        # Resources/Clio.entitlements.
+        CODE_SIGN_ENTITLEMENTS: Resources/Clio.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
@@ -102,6 +108,7 @@ targets:
         product: ClioMobileActivity
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
     settings:
       base:
         PRODUCT_NAME: ClioWidget
@@ -142,6 +149,7 @@ schemes:
       config: Debug
       targets:
         - package: ClioMobile/ClioMobileCoreTests
+        - package: ClioMobile/ClioMobileSummaryTests
         - ClioUITests
     profile:
       config: Release

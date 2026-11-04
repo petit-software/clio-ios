@@ -50,5 +50,8 @@ let package = Package(
         .target(name: "ClioMobileUI",
                 dependencies: ["ClioMobileCore", "ClioMobileActivity", "ClioMobileSummary"]),
         .testTarget(name: "ClioMobileCoreTests", dependencies: ["ClioMobileCore"]),
+        // The MLX engine against a real downloaded model, on the host's
+        // GPU. Every test in it is gated on CLIO_INTEGRATION=1.
+        .testTarget(name: "ClioMobileSummaryTests", dependencies: ["ClioMobileSummary"]),
     ]
 )

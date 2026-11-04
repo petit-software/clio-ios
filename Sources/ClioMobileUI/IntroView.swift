@@ -19,7 +19,7 @@ struct IntroView: View {
                         point("waveform", "Record and transcribe",
                               "Whisper runs on this phone's Neural Engine. Audio and text never leave it.")
                         point("sparkles", "Titles and summaries",
-                              "Written by the language model built into iOS, on the phone, when it has one.")
+                              "Written on the phone by Apple Intelligence, or by a model you download.")
                         point("hand.tap", "Tap a sentence",
                               "Playback jumps to the moment it was said.")
                         point("hand.point.up.left", "Hold to record",

@@ -58,6 +58,10 @@ public struct Settings: Codable, Equatable, Sendable {
     /// every summary path — the first one, Summarize Again, a retry — is
     /// handed the same thing. See `SummaryPrompt`.
     public var summaryPreferences = SummaryPreferences()
+    /// Which model writes them: Apple's, or a downloaded one by id. The
+    /// router keeps this pointing at something that can actually run —
+    /// see `SummaryRouter`.
+    public var summaryModel: SummaryModelChoice = .apple
 
     public init() {}
 
@@ -109,6 +113,7 @@ public struct Settings: Codable, Equatable, Sendable {
 
         generateSummaries = read(.generateSummaries, defaults.generateSummaries)
         summaryPreferences = read(.summaryPreferences, defaults.summaryPreferences)
+        summaryModel = read(.summaryModel, defaults.summaryModel)
         // Before the preferences, the one field was a whole prompt of the
         // user's own that replaced the built-in one. What they wrote is kept
         // as additions to the rules, which is the nearest thing it can be.

@@ -32,8 +32,15 @@ public enum AppPaths {
         supportDirectory.appendingPathComponent("recordings", isDirectory: true)
     }
 
+    /// Whisper models.
     public static var modelsDirectory: URL {
         supportDirectory.appendingPathComponent("models", isDirectory: true)
+    }
+
+    /// Language models for titles and summaries, beside the Whisper ones
+    /// and excluded from backup the same way.
+    public static var languageModelsDirectory: URL {
+        supportDirectory.appendingPathComponent("language-models", isDirectory: true)
     }
 
     public static func ensureDirectories() throws {
@@ -41,11 +48,12 @@ public enum AppPaths {
         for url in [supportDirectory, recordingsDirectory] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
-        try manager.createDirectory(at: modelsDirectory,
-                                    withIntermediateDirectories: true)
-        var models = modelsDirectory
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        try? models.setResourceValues(values)
+        for directory in [modelsDirectory, languageModelsDirectory] {
+            try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+            var url = directory
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try? url.setResourceValues(values)
+        }
     }
 }

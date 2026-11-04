@@ -43,11 +43,17 @@ public struct CatalogModel: Codable, Sendable, Equatable, Identifiable {
     public var tier: QualityTier
     public var languages: ModelLanguages
     public var note: String?
+    /// About how much memory the model takes to run — weights, cache and
+    /// working room — for a language model, so a phone that cannot hold it
+    /// is told so before the download rather than by being killed after.
+    /// Nil for a Whisper model, which Core ML pages as it likes.
+    public var memoryBytes: Int64?
 
     public init(id: String, displayName: String, repo: String,
                 tokenizerRepo: String? = nil,
                 approximateBytes: Int64, tier: QualityTier,
-                languages: ModelLanguages, note: String? = nil) {
+                languages: ModelLanguages, note: String? = nil,
+                memoryBytes: Int64? = nil) {
         self.id = id
         self.displayName = displayName
         self.repo = repo
@@ -56,6 +62,7 @@ public struct CatalogModel: Codable, Sendable, Equatable, Identifiable {
         self.tier = tier
         self.languages = languages
         self.note = note
+        self.memoryBytes = memoryBytes
     }
 }
 
@@ -129,4 +136,50 @@ public enum ModelCatalog {
     /// the recordings are as likely to be Dutch as English. Distil Large
     /// is one tap away for anyone who wants it.
     public static let defaultModelID = "openai_whisper-small_216MB"
+}
+
+/// The language models offered for titles and summaries on a phone without
+/// Apple Intelligence — or by choice on one with it. MLX models from the
+/// mlx-community repos on Hugging Face: 4-bit weights, config and tokenizer
+/// at the root of each repo, loaded and run on the GPU by `MLXSummaryEngine`.
+///
+/// Three, deliberately: a small one that fits a phone with 4 GB, a middle
+/// one that is the default, and one from another family for anyone who
+/// wants to compare. Sizes are the repos' own, measured; the memory figures
+/// are estimates — about one and a half times the weights plus working
+/// room — and the figure that matters is measured on a phone, see
+/// AGENTS.md. Both Qwen3 models are Apache 2.0; Gemma 3 is under Google's
+/// Gemma terms, which allow this use and ask that they be passed on.
+public enum LanguageModelCatalog {
+    public static let builtIn: [CatalogModel] = [
+        CatalogModel(
+            id: "Qwen3-0.6B-4bit",
+            displayName: "Qwen3 0.6B",
+            repo: "mlx-community/Qwen3-0.6B-4bit",
+            approximateBytes: 351_000_000,
+            tier: .fast,
+            languages: .multilingual,
+            note: "Smallest. Short, plain summaries; fits a phone with 4 GB. Apache 2.0.",
+            memoryBytes: 900_000_000),
+        CatalogModel(
+            id: "Qwen3-1.7B-4bit",
+            displayName: "Qwen3 1.7B",
+            repo: "mlx-community/Qwen3-1.7B-4bit",
+            approximateBytes: 984_000_000,
+            tier: .balanced,
+            languages: .multilingual,
+            note: "The one to start with. Apache 2.0.",
+            memoryBytes: 1_900_000_000),
+        CatalogModel(
+            id: "gemma-3-1b-it-4bit",
+            displayName: "Gemma 3 1B",
+            repo: "mlx-community/gemma-3-1b-it-4bit",
+            approximateBytes: 772_000_000,
+            tier: .balanced,
+            languages: .multilingual,
+            note: "Google's model, under the Gemma terms of use.",
+            memoryBytes: 1_500_000_000),
+    ]
+
+    public static let defaultModelID = "Qwen3-1.7B-4bit"
 }

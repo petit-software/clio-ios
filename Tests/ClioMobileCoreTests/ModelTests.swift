@@ -110,6 +110,37 @@ struct ModelCatalogTests {
     }
 }
 
+@Suite("Language model catalog")
+struct LanguageModelCatalogTests {
+    @Test("Every language model has a memory figure, no tokenizer repo, and the default is listed")
+    func shape() {
+        #expect(LanguageModelCatalog.builtIn.contains { $0.id == LanguageModelCatalog.defaultModelID })
+        #expect(LanguageModelCatalog.builtIn.allSatisfy { $0.memoryBytes != nil })
+        #expect(LanguageModelCatalog.builtIn.allSatisfy { $0.tokenizerRepo == nil },
+                "the tokenizer is in the repo itself")
+        #expect(LanguageModelCatalog.builtIn.allSatisfy { ($0.memoryBytes ?? 0) > $0.approximateBytes })
+    }
+
+    @Test("A catalog entry without a memory figure still decodes")
+    func memoryIsOptional() throws {
+        let json = #"[{"id":"x","displayName":"X","repo":"a/b","approximateBytes":1,"tier":"fast","languages":"english"}]"#
+        let decoded = try JSONDecoder().decode([CatalogModel].self, from: Data(json.utf8))
+        #expect(decoded.first?.memoryBytes == nil)
+    }
+
+    @Test("A model fits when the process has the memory, and says what it needs when not")
+    func fits() {
+        let model = LanguageModelCatalog.builtIn[0]
+        #expect(LanguageModelSupport.fits(model, available: 4_000_000_000) == .supported)
+        let verdict = LanguageModelSupport.fits(model, available: 500_000_000)
+        #expect(verdict.isSupported == false)
+        #expect(verdict.reason?.contains(model.displayName) == true)
+        let whisper = ModelCatalog.builtIn[0]
+        #expect(LanguageModelSupport.fits(whisper, available: 1) == .supported, "no figure, no check")
+    }
+}
+
+// MARK: - Manager
 // MARK: - Manager
 
 @Suite("Model manager")
@@ -132,6 +163,55 @@ struct ModelManagerTests {
         let manager = ModelManager(transport: StubTransport(files: []), modelsDirectory: root)
         #expect(manager.installed.map(\.id) == [tinyID])
         #expect(manager.installed.first?.displayName == "Whisper Tiny", "named from the catalog")
+    }
+
+    @Test("A language model is a folder with a config and its weights, nothing else counts")
+    @MainActor
+    func languageModelDiscovery() throws {
+        let root = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let good = root.appendingPathComponent("Qwen3-0.6B-4bit")
+        try FileManager.default.createDirectory(at: good, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: good.appendingPathComponent("config.json"))
+        try Data([0]).write(to: good.appendingPathComponent("model.safetensors"))
+
+        let halfway = root.appendingPathComponent("gemma-3-1b-it-4bit")
+        try FileManager.default.createDirectory(at: halfway, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: halfway.appendingPathComponent("config.json"))
+
+        let whisper = root.appendingPathComponent("\(tinyID)/AudioEncoder.mlmodelc")
+        try FileManager.default.createDirectory(at: whisper, withIntermediateDirectories: true)
+
+        let manager = ModelManager(transport: StubTransport(files: []), modelsDirectory: root,
+                                   layout: .languageModel)
+        #expect(manager.installed.map(\.id) == ["Qwen3-0.6B-4bit"])
+        #expect(manager.installed.first?.displayName == "Qwen3 0.6B", "named from its own catalog")
+        #expect(manager.catalog == LanguageModelCatalog.builtIn)
+    }
+
+    @Test("A language model's files land at the root of its folder")
+    @MainActor
+    func languageModelDownload() async throws {
+        let root = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let files = [
+            RemoteFile(path: "config.json", size: 32),
+            RemoteFile(path: "model.safetensors", size: 4096),
+            RemoteFile(path: "tokenizer.json", size: 256),
+        ]
+        let transport = StubTransport(files: files)
+        let manager = ModelManager(transport: transport, modelsDirectory: root, layout: .languageModel)
+        let entry = LanguageModelCatalog.builtIn[0]
+
+        manager.download(entry)
+        try await waitUntil { manager.isInstalled(entry.id) }
+
+        let folder = root.appendingPathComponent(entry.id)
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("config.json").path))
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("model.safetensors").path))
+        #expect(transport.downloaded == files.map(\.path))
+        #expect(manager.installedModel(id: entry.id)?.sizeBytes == Int64(32 + 4096 + 256))
     }
 
     @Test("Directory size sums nested files")
