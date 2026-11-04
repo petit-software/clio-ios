@@ -1,11 +1,11 @@
 import ClioMobileCore
 import SwiftUI
 
-/// The record sheet: what is happening, the clock, the meter, pause and
-/// stop. A plain system sheet at medium height — the presentation Settings
-/// and the intro use — on the system background with system buttons, in
-/// whichever appearance the phone is in. Recording starts as the sheet
-/// appears; Stop closes it, and the transcript is written behind the list.
+/// The record sheet: a red pill saying it is recording, the clock, the
+/// meter, and the pause and stop capsules in the bottom inset. A system
+/// sheet at medium height in the phone's appearance; recording starts as
+/// it appears, Stop closes it, and the transcript is written behind the
+/// list.
 ///
 /// The recorder is the shared `CaptureController`, so the sheet shows
 /// whatever state the controller is in and the rest of the app — the Live
@@ -19,9 +19,15 @@ struct RecordView: View {
     /// it means the recording landed or was cancelled, and the sheet goes.
     @State private var started = false
     private let startsAutomatically: Bool
-    /// Called when the sheet should go: cancelled, closed after a failure,
+    /// Called when the sheet should go: discarded, closed after a failure,
     /// or the recording stopped. The root opens a recording that lands.
     private let onClose: () -> Void
+
+    /// The controls' height and fills: the capsules the sheet has had all
+    /// along, on fills that follow the appearance.
+    static let actionHeight: CGFloat = 52
+    static let inertFill = Color.secondary.opacity(0.18)
+    static let destructive = Color.red
 
     init(startsAutomatically: Bool = true, onClose: @escaping () -> Void = {}) {
         self.startsAutomatically = startsAutomatically
@@ -30,40 +36,40 @@ struct RecordView: View {
 
     var body: some View {
         let capture = model.capture
-        NavigationStack {
-            VStack(spacing: 20) {
-                status(capture)
-                    .frame(maxWidth: .infinity)
-                Spacer(minLength: 0)
-                clock(capture)
-                VoiceBarsMeter(bands: capture.bands, reduceMotion: reduceMotion)
-                    .frame(height: 64)
-                    .padding(.horizontal, 32)
-                    .opacity(capture.state == .recording ? 1 : 0.35)
-                    .animation(.default, value: capture.state == .recording)
-                Spacer(minLength: 0)
-                controls(capture)
+        VStack(spacing: 16) {
+            statusPill(capture)
+                .padding(.top, 8)
+            Spacer(minLength: 0)
+            clock(capture)
+            VoiceBarsMeter(bands: capture.bands, reduceMotion: reduceMotion)
+                .frame(height: 64)
+                .padding(.horizontal, 32)
+                .opacity(capture.state == .recording ? 1 : 0.35)
+                .animation(.default, value: capture.state == .recording)
+            if capture.state == .interrupted {
+                Text("Another app has the microphone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-            .padding(.bottom, 20)
-            .navigationTitle(title(capture))
-            .inlineTitle()
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        if capture.state.isCapturing {
-                            confirmingDiscard = true
-                        } else {
-                            Task { await close(cancelling: true) }
-                        }
-                    }
-                }
+            if case .failed(let message) = capture.state {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
             }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            controls(capture)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 8)
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        // A swipe down must not throw a recording away. Cancel asks first.
+        // A swipe down must not throw a recording away. The X asks first.
         .interactiveDismissDisabled(capture.state.isBusy)
         .confirmationDialog("Discard this recording?", isPresented: $confirmingDiscard,
                             titleVisibility: .visible) {
@@ -91,51 +97,44 @@ struct RecordView: View {
 
     // MARK: Status
 
-    @ViewBuilder
-    private func status(_ capture: CaptureController) -> some View {
-        switch capture.state {
-        case .starting:
-            Label("Starting…", systemImage: "mic")
-                .foregroundStyle(.secondary)
-        case .recording:
-            Label {
-                Text("Recording")
-            } icon: {
-                RecordingDot(pulsing: !reduceMotion)
-            }
-        case .paused:
-            Label("Paused", systemImage: "pause.fill")
-                .foregroundStyle(.secondary)
-        case .interrupted:
-            Label("Paused. Another app has the microphone.", systemImage: "pause.fill")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .multilineTextAlignment(.center)
-        case .idle, .transcribing:
-            Label("Recording", systemImage: "mic")
-                .hidden()
+    /// Where a title would be: a red pill that says Recording, grey when
+    /// paused or still starting.
+    private func statusPill(_ capture: CaptureController) -> some View {
+        let recording = capture.state == .recording
+        let word: String = switch capture.state {
+        case .recording: capture.appendingTo == nil ? "Recording" : "Adding to Recording"
+        case .paused, .interrupted: "Paused"
+        case .starting: "Starting…"
+        case .failed: "Failed"
+        case .idle, .transcribing: "Recording"
         }
+        return HStack(spacing: 8) {
+            if recording {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 9))
+                    .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+            }
+            Text(word)
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundStyle(recording ? Color.white : Color.primary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(recording ? Self.destructive : Self.inertFill, in: Capsule(style: .continuous))
+        .animation(.default, value: recording)
+        .accessibilityLabel(word)
     }
 
     private func clock(_ capture: CaptureController) -> some View {
         let seconds = Int(capture.elapsed)
-        return VStack(spacing: 6) {
-            Text(Format.duration(capture.elapsed))
-                .font(.system(size: clockSize, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-                .contentTransition(reduceMotion ? .identity : .numericText(value: Double(seconds)))
-                .animation(reduceMotion ? nil : .default, value: seconds)
-            Text("Stops at \(RecordingLimit.label(seconds: capture.maxSeconds))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(statusWord(capture)), \(Format.duration(capture.elapsed))")
+        return Text(Format.duration(capture.elapsed))
+            .font(.system(size: clockSize, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .minimumScaleFactor(0.5)
+            .lineLimit(1)
+            .contentTransition(reduceMotion ? .identity : .numericText(value: Double(seconds)))
+            .animation(reduceMotion ? nil : .default, value: seconds)
+            .accessibilityLabel("\(statusWord(capture)), \(Format.duration(capture.elapsed))")
     }
 
     private func statusWord(_ capture: CaptureController) -> String {
@@ -148,52 +147,82 @@ struct RecordView: View {
         }
     }
 
-    private func title(_ capture: CaptureController) -> String {
-        switch capture.state {
-        case .failed: return "Recording"
-        default: return capture.appendingTo == nil ? "New Recording" : "Adding to Recording"
-        }
-    }
-
     // MARK: Controls
 
+    /// Pause, Stop, and the X that discards — the capsules the sheet had
+    /// before, each `actionHeight` tall and drawing its own fill.
     @ViewBuilder
     private func controls(_ capture: CaptureController) -> some View {
         switch capture.state {
         case .failed:
             HStack(spacing: 12) {
-                Button("Close") { Task { await close(cancelling: false) } }
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
-                Button("Try Again") {
+                capsuleButton("Close", fill: Self.inertFill) {
+                    Task { await close(cancelling: false) }
+                }
+                capsuleButton("Try Again", fill: Self.destructive, foreground: .white) {
                     capture.dismissFailure()
                     Task { await begin() }
                 }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
             }
-            .controlSize(.large)
         default:
             let paused = capture.state == .paused
+            let canPause = capture.state == .recording || paused
+            let canStop = capture.state.isCapturing
             HStack(spacing: 12) {
-                Button(paused ? "Resume" : "Pause",
-                       systemImage: paused ? "play.fill" : "pause.fill") {
+                iconButton(paused ? "play.fill" : "pause.fill",
+                           label: paused ? "Resume" : "Pause",
+                           disabled: !canPause) {
                     Task { paused ? await capture.resume() : await capture.pause() }
                 }
-                .buttonStyle(.bordered)
-                .disabled(!(capture.state == .recording || paused))
-
-                Button("Stop", systemImage: "stop.fill") {
+                Button {
                     Task { await stop() }
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
+                        .contentShape(Capsule(style: .continuous))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .frame(maxWidth: .infinity)
-                .disabled(!capture.state.isCapturing)
+                .buttonStyle(.plain)
+                .background(canStop ? Self.destructive : Self.inertFill,
+                            in: Capsule(style: .continuous))
+                .disabled(!canStop)
                 .accessibilityLabel("Stop recording")
+                iconButton("xmark", label: "Discard recording", disabled: !capture.state.isBusy) {
+                    confirmingDiscard = true
+                }
             }
-            .controlSize(.large)
         }
+    }
+
+    private func capsuleButton(_ title: LocalizedStringKey, fill: Color,
+                               foreground: Color = .primary,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(foreground)
+                .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .background(fill, in: Capsule(style: .continuous))
+    }
+
+    private func iconButton(_ symbol: String, label: String, disabled: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(disabled ? Color.secondary.opacity(0.5) : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .background(Self.inertFill, in: Capsule(style: .continuous))
+        .disabled(disabled)
+        .accessibilityLabel(label)
     }
 
     // MARK: Actions
@@ -225,17 +254,6 @@ struct RecordView: View {
     private func haptic(_ play: @MainActor () -> Void) {
         guard model.settings.settings.hapticFeedback else { return }
         play()
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func inlineTitle() -> some View {
-        #if os(iOS)
-        navigationBarTitleDisplayMode(.inline)
-        #else
-        self
-        #endif
     }
 }
 
