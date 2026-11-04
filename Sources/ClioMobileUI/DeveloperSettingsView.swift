@@ -40,6 +40,9 @@ struct DeveloperSettingsPage: View {
             } footer: {
                 Text("The sheet a first run gets.")
             }
+            // The sliders exist in debug builds only; a TestFlight build
+            // has this page without them.
+            #if DEBUG
             Section {
                 Toggle("Blur controls", isOn: Binding(
                     get: { BlurTuning.shared.showing },
@@ -48,6 +51,7 @@ struct DeveloperSettingsPage: View {
                 Text("Sliders over the list for the blur under the record button. "
                      + "Copy puts the numbers on the clipboard.")
             }
+            #endif
             PagePreviewsSection()
             if let message {
                 Section {
