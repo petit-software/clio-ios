@@ -54,6 +54,14 @@ public final class AppModel {
             guard let self else { return }
             Task { await self.intelligence.refreshAvailability() }
         }
+        if settings.settings.demoMode { library.useDemo(DemoLibrary.recordings) }
+    }
+
+    /// Demo mode on or off: the sample recordings stand in for the library,
+    /// or the library is back, untouched.
+    public func setDemoMode(_ on: Bool) {
+        settings.settings.demoMode = on
+        library.useDemo(on ? DemoLibrary.recordings : nil)
     }
 
     /// The real thing: WhisperKit on whatever is in the models folder,

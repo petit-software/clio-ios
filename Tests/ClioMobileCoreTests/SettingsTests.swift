@@ -66,6 +66,16 @@ struct SettingsAdditionsTests {
                 == "Answer in Dutch.")
     }
 
+    @Test("Demo mode defaults off and survives a round trip")
+    func demoMode() throws {
+        #expect(Settings().demoMode == false)
+        var settings = Settings()
+        settings.demoMode = true
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).demoMode)
+        #expect(try JSONDecoder().decode(Settings.self, from: Data("{}".utf8)).demoMode == false)
+    }
+
     @Test("Include location defaults off and survives a round trip")
     func includeLocation() throws {
         #expect(Settings().includeLocation == false)

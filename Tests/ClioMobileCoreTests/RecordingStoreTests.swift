@@ -90,6 +90,56 @@ struct RecordingStoreTests {
         #expect(store.recordings.isEmpty)
     }
 
+    @Test("Demo mode stands in for the library and leaves it untouched")
+    @MainActor
+    func demoMode() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let index = directory.appendingPathComponent("r.json")
+        let store = RecordingStore(indexURL: index, audioDirectory: directory)
+        let mine = Recording(duration: 5, transcript: "mine")
+        try Data([1]).write(to: store.audioURL(for: mine))
+        store.add(mine)
+
+        store.useDemo(DemoLibrary.recordings)
+        #expect(store.isDemo)
+        #expect(store.recordings.count == DemoLibrary.recordings.count)
+        #expect(store[mine.id] == nil)
+        // Changes land in the demo set only; the disk and the file stay.
+        let first = try #require(store.recordings.first)
+        store.rename(first.id, to: "Renamed")
+        store.delete(store.recordings.last!.id)
+        store.add(Recording(duration: 1, transcript: "new in demo"))
+        #expect(store[first.id]?.title == "Renamed")
+        let written = try JSONDecoder().decode([Recording].self, from: Data(contentsOf: index))
+        #expect(written.map(\.id) == [mine.id])
+        #expect(FileManager.default.fileExists(atPath: store.audioURL(for: mine).path))
+
+        store.useDemo(nil)
+        #expect(!store.isDemo)
+        #expect(store.recordings == [mine])
+    }
+
+    @Test("The demo recordings read as real: titles, summaries, segments, no audio")
+    func demoLibrary() {
+        let demo = DemoLibrary.recordings
+        #expect(demo.count >= 10)
+        #expect(Set(demo.map(\.id)).count == demo.count, "stable, distinct ids")
+        for recording in demo {
+            #expect(recording.status == .transcribed)
+            #expect(!recording.transcript.isEmpty)
+            #expect(recording.summary?.isEmpty == false)
+            #expect(recording.generatedTitle?.split(separator: " ").count ?? 9 <= 5)
+            #expect(!recording.segments.isEmpty)
+            #expect(recording.segments.last!.end <= recording.duration)
+            #expect(recording.segments.map(\.text).joined(separator: " ") == recording.transcript)
+            #expect(recording.duration > 5)
+        }
+        #expect(demo.contains { $0.language == "nl" })
+        #expect(demo.contains { !$0.title.isEmpty })
+        #expect(demo.contains { $0.location != nil })
+    }
+
     @Test("A recording decodes with missing optional fields")
     func tolerantDecoding() throws {
         let id = UUID()

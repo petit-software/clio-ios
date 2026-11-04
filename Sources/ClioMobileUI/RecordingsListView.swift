@@ -1,5 +1,8 @@
 import ClioMobileCore
 import SwiftUI
+#if canImport(BlurSwiftUI)
+import BlurSwiftUI
+#endif
 
 /// Two ways to put the record button under the list. Both kept, so the
 /// one that is not the default can be looked at: `CLIO_HOME=pane` or
@@ -58,8 +61,8 @@ private struct SearchingReporter: View {
 struct RecordingsListView: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
-    /// Up while the "Copied" toast is on screen.
-    @State private var copied = false
+    /// The toast on screen — "Copied", "Deleted" — or nil.
+    @State private var toast: ListToast?
     /// Picking rows to delete: what is ticked, and whether the list is in
     /// that mode at all. A long press on any row starts it.
     ///
@@ -92,13 +95,13 @@ struct RecordingsListView: View {
             // Above the record button, where the transcribing toast goes,
             // so the two never sit in different places.
             .overlay(alignment: .bottom) {
-                if copied {
-                    Toast("Copied", systemImage: "square.fill.on.square.fill")
+                if let toast {
+                    Toast(LocalizedStringKey(toast.title), systemImage: toast.symbol)
                         .padding(.bottom, ToastLayout.bottomInset(above: safeArea.bottom))
                         .transition(ToastLayout.transition)
                 }
             }
-            .animation(.smooth(duration: 0.3), value: copied)
+            .animation(.smooth(duration: 0.3), value: toast)
             .toolbar {
                 if selecting {
                     ToolbarItem(placement: .cancellationAction) {
@@ -165,15 +168,15 @@ struct RecordingsListView: View {
     /// first thing to do is download one, and the record button goes too.
     /// One at a time: a second copy restarts the toast rather than
     /// letting the first one take it away early.
-    @State private var copyDismissal: Task<Void, Never>?
+    @State private var toastDismissal: Task<Void, Never>?
 
-    private func showCopied() {
-        copied = true
-        copyDismissal?.cancel()
-        copyDismissal = Task {
+    private func show(_ next: ListToast) {
+        toast = next
+        toastDismissal?.cancel()
+        toastDismissal = Task {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
-            copied = false
+            toast = nil
         }
     }
 
@@ -275,9 +278,14 @@ struct RecordingsListView: View {
                         RecordingRow(recording: recording,
                                      transcribing: model.capture.isTranscribing(recording),
                                      selecting: selecting,
-                                     selected: selection.contains(recording.id)) {
-                            showCopied()
-                        }
+                                     selected: selection.contains(recording.id),
+                                     onCopy: { show(ListToast.copied) },
+                                     onDiscard: {
+                                         // Nothing in it to lose: gone on the tap,
+                                         // no question asked.
+                                         model.library.delete(recording.id)
+                                         show(ListToast.deleted)
+                                     })
                         // The whole row, gaps included, so a tap anywhere
                         // but the copy button counts.
                         .contentShape(Rectangle())
@@ -378,6 +386,15 @@ struct RecordingsListView: View {
     }
 }
 
+/// What the list says at the bottom for a moment.
+struct ListToast: Equatable {
+    var title: String
+    var symbol: String
+
+    static let copied = ListToast(title: "Copied", symbol: "square.fill.on.square.fill")
+    static let deleted = ListToast(title: "Deleted", symbol: "trash.fill")
+}
+
 /// A row: the title and the start of the transcript on the left, the
 /// length in a glass pill on the right, where a list would put its
 /// chevron. When it was recorded is the section heading above and the
@@ -395,6 +412,9 @@ struct RecordingRow: View {
     /// it. The toast belongs to the screen, not the row, so the row only
     /// says it happened.
     var onCopy: () -> Void = {}
+    /// The cross on a row nothing was heard in: the recording goes, without
+    /// a question — there is nothing in it to lose.
+    var onDiscard: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -468,12 +488,15 @@ struct RecordingRow: View {
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
             } else if recording.status == .nothingHeard {
-                // Nothing to copy, and the reason: a filled cross where the
-                // copy mark would be.
-                Image(systemName: "xmark.circle.fill")
+                // Nothing to copy, and nothing to keep: a cross where the
+                // copy mark would be, and it deletes.
+                Button("Delete", systemImage: "xmark.circle.fill", action: onDiscard)
+                    .labelStyle(.iconOnly)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("Nothing was heard")
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Delete, nothing was heard")
             } else {
                 Color.clear
             }
@@ -859,15 +882,21 @@ struct VoiceWash: View, @preconcurrency Animatable {
     }
 }
 
-/// The blur under the wash: a material masked by a vertical gradient, so
-/// its tint and blur fade in together from the top of the wash. Not a
-/// variable blur — there is no public one, and the private one was tried
-/// and taken out — but it reads as one. `strength` is the material's
-/// opacity at the bottom, stronger while a held recording runs.
+/// The blur under the wash: a progressive blur from nothing at the top of
+/// the wash to its full radius at the screen edge, so the rows soften as
+/// they scroll in and are gone by the button. BlurUIKit's variable blur
+/// on iOS; on the host build, where there is no UIKit, a material masked
+/// by a gradient stands in so previews still have a foot. `strength` is
+/// the radius at the bottom, more while a held recording runs.
 struct WashBlur: View {
     var strength: Double
 
     var body: some View {
+        #if canImport(BlurSwiftUI)
+        VariableBlur(direction: .up)
+            .maximumBlurRadius(10 * strength)
+            .dimmingAlpha(.interfaceStyle(lightModeAlpha: 0.35 * strength, darkModeAlpha: 0.2 * strength))
+        #else
         Rectangle()
             .fill(.regularMaterial)
             .mask {
@@ -875,6 +904,7 @@ struct WashBlur: View {
                     stops: VoiceWash.easedStops(.black, to: strength, reaching: VoiceWash.fadeEnd),
                     startPoint: .top, endPoint: .bottom)
             }
+        #endif
     }
 }
 

@@ -23,6 +23,9 @@ let package = Package(
         // A language model on the phone's GPU, for titles and summaries
         // where Apple Intelligence is not there. Apple's own framework.
         .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.29.1"),
+        // The progressive blur under the record button and the foot of the
+        // detail: the public, App Store-safe face of a private effect.
+        .package(url: "https://github.com/TimOliver/BlurUIKit", from: "1.8.0"),
     ],
     targets: [
         // Everything that is not SwiftUI: settings, the library of
@@ -48,7 +51,12 @@ let package = Package(
         // Every view, plus AppModel. A library so #Preview renders
         // dependably.
         .target(name: "ClioMobileUI",
-                dependencies: ["ClioMobileCore", "ClioMobileActivity", "ClioMobileSummary"]),
+                dependencies: [
+                    "ClioMobileCore", "ClioMobileActivity", "ClioMobileSummary",
+                    // iOS only; the host build draws nothing there.
+                    .product(name: "BlurSwiftUI", package: "BlurUIKit",
+                             condition: .when(platforms: [.iOS])),
+                ]),
         .testTarget(name: "ClioMobileCoreTests", dependencies: ["ClioMobileCore"]),
         // The MLX engine against a real downloaded model, on the host's
         // GPU. Every test in it is gated on CLIO_INTEGRATION=1.

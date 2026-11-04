@@ -11,8 +11,20 @@ import Observation
 @Observable
 public final class RecordingStore {
 
-    /// Newest first.
-    public private(set) var recordings: [Recording] = []
+    /// Newest first. The demo set while demo mode is on, the library
+    /// otherwise.
+    public var recordings: [Recording] {
+        get { demo ?? stored }
+        set {
+            if demo != nil { demo = newValue } else { stored = newValue }
+        }
+    }
+    /// The user's own, on disk.
+    private var stored: [Recording] = []
+    /// Sample recordings standing in for the user's, in memory only. Every
+    /// change made while it is set lands here and is gone with it; the
+    /// index on disk is not written.
+    private var demo: [Recording]?
     /// Set when the last write failed, so About can show it.
     public private(set) var lastSaveError: String?
 
@@ -23,8 +35,16 @@ public final class RecordingStore {
                 audioDirectory: URL = AppPaths.recordingsDirectory) {
         self.indexURL = indexURL
         self.audioDirectory = audioDirectory
-        self.recordings = Self.load(from: indexURL)
+        self.stored = Self.load(from: indexURL)
     }
+
+    /// Demo mode on: the sample set stands in for the library. Off: the
+    /// library is back as it was, untouched.
+    public func useDemo(_ sample: [Recording]?) {
+        demo = sample?.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    public var isDemo: Bool { demo != nil }
 
     /// For previews and tests: fixed contents, nothing on disk.
     public static func simulating(_ recordings: [Recording] = []) -> RecordingStore {
@@ -111,7 +131,9 @@ public final class RecordingStore {
     /// and of the two the leak is the one nobody sees.
     public func delete(_ id: Recording.ID) {
         guard let recording = self[id] else { return }
-        for url in audioURLs(for: recording) { try? FileManager.default.removeItem(at: url) }
+        if demo == nil {
+            for url in audioURLs(for: recording) { try? FileManager.default.removeItem(at: url) }
+        }
         recordings.removeAll { $0.id == id }
         save()
     }
@@ -119,8 +141,10 @@ public final class RecordingStore {
     public func delete(_ recording: Recording) { delete(recording.id) }
 
     public func deleteAll() {
-        for url in recordings.flatMap(audioURLs(for:)) {
-            try? FileManager.default.removeItem(at: url)
+        if demo == nil {
+            for url in recordings.flatMap(audioURLs(for:)) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         recordings = []
         save()
@@ -168,7 +192,7 @@ public final class RecordingStore {
         guard var recording = self[id],
               let index = recording.parts.firstIndex(where: { $0.id == partID })
         else { return }
-        try? FileManager.default.removeItem(at: audioURL(for: recording.parts[index]))
+        if demo == nil { try? FileManager.default.removeItem(at: audioURL(for: recording.parts[index])) }
         if recording.parts.count == 1 {
             recordings.removeAll { $0.id == id }
             save()
@@ -220,13 +244,15 @@ public final class RecordingStore {
     }
 
     private func save() {
+        // Nothing of the demo set is written.
+        guard demo == nil else { return }
         do {
             try FileManager.default.createDirectory(
                 at: indexURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(recordings)
+            let data = try encoder.encode(stored)
             try data.write(to: indexURL, options: .atomic)
             lastSaveError = nil
         } catch {

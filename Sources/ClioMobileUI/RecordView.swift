@@ -87,8 +87,7 @@ struct RecordView: View {
 
     // MARK: Status
 
-    /// Where a title would be: a red pill that says Recording, grey when
-    /// paused or still starting.
+    /// Where a title would be: a red dot and the word. Nothing around it.
     private func statusPill(_ capture: CaptureController) -> some View {
         let recording = capture.state == .recording
         let word: String = switch capture.state {
@@ -99,18 +98,13 @@ struct RecordView: View {
         case .idle, .transcribing: "Recording"
         }
         return HStack(spacing: 8) {
-            if recording {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 9))
-                    .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-            }
+            Image(systemName: "circle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(recording ? Self.destructive : Color.secondary)
+                .symbolEffect(.pulse, options: .repeating, isActive: recording && !reduceMotion)
             Text(word)
                 .font(.subheadline.weight(.semibold))
         }
-        .foregroundStyle(recording ? Color.white : Color.primary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(recording ? Self.destructive : Self.inertFill, in: Capsule(style: .continuous))
         .animation(.default, value: recording)
         .accessibilityLabel(word)
     }

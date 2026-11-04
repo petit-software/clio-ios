@@ -63,17 +63,6 @@ struct SettingsView: View {
                          + "trailing punctuation.")
                 }
                 Section {
-                    Picker("Appearance", selection: Binding(
-                        get: { store.settings.appearance },
-                        set: { store.settings.appearance = $0 })) {
-                        ForEach(Appearance.allCases, id: \.self) { Text($0.name).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                    .greyMenu()
-                } footer: {
-                    Text("Light, dark, or whatever the phone is set to.")
-                }
-                Section {
                     page("Recording",
                          value: RecordingLimit.label(seconds: store.settings.maxRecordingSeconds)) {
                         recordingSection(store)
@@ -90,11 +79,30 @@ struct SettingsView: View {
                          + "or a downloaded model, and how they read.")
                 }
                 Section {
+                    Picker("Appearance", selection: Binding(
+                        get: { store.settings.appearance },
+                        set: { store.settings.appearance = $0 })) {
+                        ForEach(Appearance.allCases, id: \.self) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .greyMenu()
+                } footer: {
+                    Text("Light, dark, or whatever the phone is set to.")
+                }
+                Section {
                     page("Storage", value: Format.bytes(onThisPhone)) {
                         storageSection
                     }
                 } footer: {
                     Text("What Clio is keeping on this phone, and how to remove it.")
+                }
+                Section {
+                    Toggle("Demo mode", isOn: Binding(
+                        get: { store.settings.demoMode },
+                        set: { model.setDemoMode($0) }))
+                } footer: {
+                    Text("Sample recordings in place of yours, for showing the app. "
+                         + "Nothing you have recorded is changed; turn it off and they are back.")
                 }
                 Section {
                     LabeledContent("Version", value: Self.version)
@@ -143,7 +151,8 @@ struct SettingsView: View {
             .softScrollEdges()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                 }
             }
         }

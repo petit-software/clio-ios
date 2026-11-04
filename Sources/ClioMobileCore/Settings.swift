@@ -40,6 +40,10 @@ public struct Settings: Codable, Equatable, Sendable {
     public var autoCopyTranscript: Bool = false
     /// The first-run sheet has been seen.
     public var introShown: Bool = false
+    /// Sample recordings in place of the user's own, for showing the app:
+    /// transcripts, titles and summaries that read as real, and no audio.
+    /// Nothing of the user's is touched while it is on.
+    public var demoMode: Bool = false
     /// Light, dark, or whatever the phone is set to.
     public var appearance: Appearance = .system
     public var customVocabulary: [String] = []
@@ -102,6 +106,7 @@ public struct Settings: Codable, Equatable, Sendable {
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)
         autoCopyTranscript = read(.autoCopyTranscript, defaults.autoCopyTranscript)
         introShown = read(.introShown, defaults.introShown)
+        demoMode = read(.demoMode, defaults.demoMode)
         appearance = read(.appearance, defaults.appearance)
         customVocabulary = read(.customVocabulary, defaults.customVocabulary)
         wordReplacements = read(.wordReplacements, defaults.wordReplacements)
