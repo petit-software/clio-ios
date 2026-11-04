@@ -160,16 +160,11 @@ struct IntegrationTests {
         let room = [Float](repeating: 0, count: Int(1.0 * AudioRecorder.sampleRate))
         let clip = loud + soft + room
 
-        let trimmed = try #require(VoiceActivityTrimmer.trim(clip, sensitivity: 0.5))
-        let keptSeconds = Double(trimmed.samples.count) / AudioRecorder.sampleRate
-        let softStart = Double(loud.count) / AudioRecorder.sampleRate
-        let softEnd = Double(loud.count + soft.count) / AudioRecorder.sampleRate
-        print("[integration] clip \(Double(clip.count) / AudioRecorder.sampleRate)s, soft sentence \(softStart)–\(softEnd)s, trimmer kept \(trimmed.trimmedLeadingSeconds)–\(trimmed.trimmedLeadingSeconds + keptSeconds)s")
-        #expect(trimmed.trimmedLeadingSeconds + keptSeconds >= softEnd,
-                "the soft sentence is inside what the model is given")
-
+        // The gate must still call this speech, and — as the app does now —
+        // the whole clip goes to the model.
+        #expect(VoiceActivityTrimmer.trim(clip, sensitivity: 0.5) != nil)
         let transcript = try await engine.transcribe(
-            samples: trimmed.samples, options: TranscribeOptions(language: "en"))
+            samples: clip, options: TranscribeOptions(language: "en"))
         print("[integration] transcript: \(transcript.text)")
         let text = transcript.text.lowercased()
         #expect(text.contains("thursday"))

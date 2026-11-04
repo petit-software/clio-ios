@@ -57,11 +57,12 @@ struct CaptureTests {
         #expect(samples.count == Int(2 * AudioRecorder.sampleRate))
     }
 
-    @Test("Segments are stored, shifted by the silence trimmed off the front")
+    @Test("The model hears the whole capture, and segments index the file as stored")
     @MainActor
-    func segmentsAreOffset() async throws {
-        // One second of silence, then two seconds of tone: the trimmer cuts
-        // most of the first second, and the segments move by that much.
+    func segmentsIndexTheFile() async throws {
+        // One second of silence, then two seconds of tone: nothing is cut
+        // off the front, so the engine sees all three seconds and the
+        // segments start where the file does.
         let silence = [Float](repeating: 0, count: Int(AudioRecorder.sampleRate))
         let tone = (0..<Int(2 * AudioRecorder.sampleRate)).map { i in
             0.1 * sin(2 * .pi * 440 * Float(i) / Float(AudioRecorder.sampleRate))
@@ -76,7 +77,8 @@ struct CaptureTests {
         let recording = try #require(library.recordings.first)
         #expect(recording.segments.count == 2)
         let first = try #require(recording.segments.first)
-        #expect(first.start > 0.7 && first.start < 1.0, "shifted by the trimmed lead")
+        #expect(first.start == 0, "nothing trimmed off the front")
+        #expect(recording.transcript.contains("48000 samples"), "all three seconds reached the engine")
         #expect(recording.transcript == recording.segments.map(\.text).joined(separator: " "))
         #expect(recording.transcript.hasPrefix("[Clio stub]"))
 

@@ -27,8 +27,7 @@ One recording, end to end, with the file that owns each step.
 | 5 | stop: the recorder removes its tap, then lowers its flag, and hands back every sample | `AudioRecorder.stop` |
 | 6 | is there a word in it at all — length, peak, voice gate — without loading anything | `ClioMobileCore/SilenceGate` |
 | 7 | the WAV is written, and the part goes into the library **as pending** | `AudioFiles.write`, `CaptureController.finish`, `RecordingStore` |
-| 8 | silence trimmed at both ends, edges walked through quiet speech, a second of pad kept after | `ClioMobileCore/VoiceActivityTrimmer` |
-| 9 | Whisper via WhisperKit, timestamps on, segments kept | `ClioMobileCore/WhisperKitEngine` |
+| 8 | the whole capture to Whisper via WhisperKit, nothing cut, timestamps on, segments kept | `ClioMobileCore/WhisperKitEngine` |
 | 10 | replacements, capitalisation, trailing punctuation | `ClioMobileCore/TranscriptFormatter` |
 | 11 | the part is written over with its words; the recording opens | `RecordingStore.replace`, `RootView.onChange(lastRecordingID)` |
 | 12 | a title and summary follow, beside the loop, from whichever model Settings names | `ClioMobileCore/IntelligenceController`, `SummaryRouter` |
@@ -147,24 +146,32 @@ TestFlight builds) fills the library and stages every screen on a phone.
 
 ## Traps
 
-**The transcript ended a sentence early while the audio did not.** Two
-causes, both fixed, both easy to reintroduce. The trimmer cut at the last
+**The transcript ended a sentence early while the audio did not.** Three
+causes, all fixed, all easy to reintroduce. The trimmer cut at the last
 frame over the energy gate plus 120 ms, and the end of a sentence is ten
 decibels under its start, so a voice trailing off was cut with the silence
-after it. The edge is now walked through frames above a second, lower gate
-and padded by a second (`VoiceActivityTrimmer`; `TrimmerEdgeTests`, and
-`IntegrationTests/quietTailIsTranscribed` shows the real model losing
-"and bring the signed contract" with the old cut). And the recorder lowered
-its running flag before removing the tap, so the buffer in flight at Stop
-was dropped. Trailing silence costs nothing inside a window Whisper pads to
-30 s; do not tighten the pad for speed.
+after it (`IntegrationTests/quietTailIsTranscribed` shows the real model
+losing "and bring the signed contract" that way). The recorder lowered its
+running flag before removing the tap, so the buffer in flight at Stop was
+dropped. And the leading cut was worse than the trailing one: Whisper is
+sensitive to exactly where a clip starts. A real recording from the
+simulator ("… if it's looking good. Cool? Thanks.") decoded whole with its
+last word; cut 0.85 s in — what the trimmer chose — it came back without
+"Thanks" and without punctuation, the mark of a temperature fallback; cut
+0.5 s or 1.0 s in it was fine. No pad is safe against that, and Whisper
+pads every clip to 30 s regardless, so **the model now hears the whole
+capture** and the trimmer only answers whether there is speech at all.
+Segment times index the file directly. Do not reintroduce trimming for
+speed; it buys none.
 
 **WhisperKit never decodes the last second after a seek.**
 `DecodingOptions.windowClipTime` is 1.0 s: the window loop stops when the
 seek is within a second of the end. For a clip of one window this is
 moot (seek is 0). For a longer one, speech in the last second after the
-final seek is dropped by design, to avoid hallucinating over the tail. The
-trimmer's pad keeps real speech out of that second.
+final seek is dropped by design, to avoid hallucinating over the tail. A
+device test on recordings over 30 s with speech right up to Stop is still
+owed; if words go there, appending a second of silence to the capture
+before the engine is the cheap answer.
 
 **A WAV with no row is a lost recording.** The part goes into the library
 before the model is asked (`CaptureController.finish` → `place`). Keep it
@@ -238,11 +245,11 @@ the right numbers on both sides; write `Int64(…)` on the literal.
 
 Verified by something repeatable, as of this release candidate:
 
-- 130 unit tests on the host: the capture state machine on a simulated
+- 131 unit tests on the host: the capture state machine on a simulated
   microphone, including the row landing before the transcript, cancel and
-  failure keeping the audio, the live preview appearing and vanishing; the
-  trimmer keeping a quiet tail, a soft first word and a word after a
-  breath; the meter not pinning on normal speech and not jittering on a
+  failure keeping the audio, the live preview appearing and vanishing, the
+  whole capture reaching the engine; the gate keeping a quiet tail, a soft
+  first word and a word after a breath as speech; the meter not pinning on normal speech and not jittering on a
   steady tone; the prompt's layers and order; preferences reaching the stub
   engine on the first summary, on Summarize Again and after a merge; a
   failed regeneration keeping the old summary; the router's five routes

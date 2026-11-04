@@ -79,7 +79,7 @@ struct SettingsView: View {
                         recordingSection(store)
                     }
                 } footer: {
-                    Text("The length cap, silence trimming, haptics, and hold to record.")
+                    Text("The length cap, silence detection, haptics, and hold to record.")
                 }
                 Section {
                     page("Intelligence", value: intelligenceSummary(store)) {
@@ -236,7 +236,7 @@ struct SettingsView: View {
                 LabeledContent("Maximum length",
                                value: RecordingLimit.label(seconds: store.settings.maxRecordingSeconds))
             }
-            Toggle("Trim silence", isOn: Binding(
+            Toggle("Skip silent recordings", isOn: Binding(
                 get: { store.settings.voiceActivityDetection },
                 set: { store.settings.voiceActivityDetection = $0 }))
             if store.settings.voiceActivityDetection {
@@ -278,8 +278,9 @@ struct SettingsView: View {
                 Text("Where a recording was made is kept with it, on this phone.")
             }
         } footer: {
-            Text("Silence at the start and end of a recording is cut before "
-                 + "transcription. Higher sensitivity keeps quieter speech. "
+            Text("A recording with no speech in it is marked as nothing heard "
+                 + "instead of transcribed. Higher sensitivity counts quieter sounds "
+                 + "as speech. "
                  + "With Hold to record on, the button records while your finger "
                  + "is on it and stops when you let go. The preview runs the model "
                  + "every few seconds while you hold, which uses more battery.")

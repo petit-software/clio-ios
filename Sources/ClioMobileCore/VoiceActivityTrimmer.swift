@@ -1,12 +1,15 @@
 import Foundation
 import WhisperKit
 
-/// Trims leading and trailing silence before transcription.
+/// Finds the speech in a clip, and the silence around it.
 ///
-/// This is the cheapest latency win available: Whisper pads every clip to a
-/// 30-second window internally, so seconds of silence at either end are
-/// seconds of inference spent on nothing — and silence is where Whisper
-/// hallucinates words.
+/// Not applied to what the model hears any more: Whisper pads every clip
+/// to a thirty-second window regardless, and it turned out to be sensitive
+/// to exactly where a clip starts — a recording cut 0.85 s in lost its last
+/// word, cut 0.5 s or 1.0 s in it did not — so the capture goes to the
+/// model whole and segment times index the file as it is. What this still
+/// does is answer `SilenceGate`'s question — is there a word in here at
+/// all — and it is kept exact at the edges for that.
 ///
 /// Copied from the Mac app. WhisperKit already ships an
 /// energy VAD, which means no extra dependency and no ~2 MB model to bundle —

@@ -514,22 +514,20 @@ public final class CaptureController {
             return
         }
 
-        // Trim silence before handing it over. Whisper pads every clip to a
-        // 30-second window, and hallucinates words over silence; cutting the
-        // quiet at either end is both a speed and a quality fix.
-        var samples = captured
-        // Segment times come back relative to what the engine heard; the
-        // file on disk still has the silence in front.
-        var leadingOffset: TimeInterval = 0
-        if current.voiceActivityDetection {
-            guard let trimmed = VoiceActivityTrimmer.trim(
-                captured, sensitivity: current.vadSensitivity) else {
-                recording.modelID = model.id
-                recording.status = .nothingHeard
-                return
-            }
-            samples = trimmed.samples
-            leadingOffset = trimmed.trimmedLeadingSeconds
+        // The model hears the whole capture, as the file keeps it. Silence
+        // used to be cut off both ends first, and that lost words: Whisper
+        // is sensitive to exactly where a clip starts — the same recording
+        // cut 0.85 s in lost its last word and all its punctuation, cut
+        // 0.5 s or 1.0 s in it did not — and it pads every clip to thirty
+        // seconds anyway, so the cut bought nothing. The trimmer is only
+        // asked whether there is any speech at all, which is cheap and
+        // sure; segment times then index the file directly.
+        let samples = captured
+        if current.voiceActivityDetection,
+           VoiceActivityTrimmer.trim(captured, sensitivity: current.vadSensitivity) == nil {
+            recording.modelID = model.id
+            recording.status = .nothingHeard
+            return
         }
 
         let options = TranscribeOptions(
@@ -542,7 +540,6 @@ public final class CaptureController {
             try await engine.load(model: model)
             let transcript = try await engine.transcribe(samples: samples, options: options)
             let segments = TranscriptFormatter.format(transcript.segments, settings: current)
-                .map { $0.offset(by: leadingOffset) }
             // With timings, the text is the segments joined, so the two
             // never disagree about a word.
             let text = segments.isEmpty

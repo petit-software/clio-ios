@@ -327,12 +327,15 @@ Seven things asked for at once, in the order they were done.
 - **The last sentence stays.** Audio files were whole and transcripts
   ended a sentence early. The trimmer cut at the last frame over the
   energy gate plus 120 ms, and a voice trailing off is ten decibels under
-  its start; the edge is now walked outward through frames above a lower
-  gate and padded by a second (`VoiceActivityTrimmer`), and the recorder
-  removes its tap before lowering its flag so the buffer in flight at
-  Stop is kept. `IntegrationTests/quietTailIsTranscribed` shows the real
-  model losing "and bring the signed contract" with the old cut and
-  keeping it now. The part goes into the library as pending *before* the
+  its start; the recorder lowered its flag before removing its tap, so the
+  buffer in flight at Stop was dropped; and the leading cut moved the
+  clip's start to wherever the gate fell, which Whisper is sensitive to —
+  a simulator recording cut 0.85 s in lost "Thanks" and its punctuation,
+  cut 0.5 s or 1.0 s in it did not. The model now hears the whole capture
+  (it pads to thirty seconds regardless), the trimmer only answers whether
+  there is speech at all, and segment times index the file directly.
+  `IntegrationTests/quietTailIsTranscribed` shows the real model losing
+  "and bring the signed contract" with the old cut and keeping it now. The part goes into the library as pending *before* the
   model is asked, and its words are written over it after: a cancel (the
   X on the Transcribing pill), a failure or a kill leaves the row with its
   audio and Transcribe Again, never a WAV without a row. Transcription
