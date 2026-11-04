@@ -12,7 +12,7 @@ import BlurSwiftUI
 /// and the near-black from its top for a word on the lime.
 enum Accent {
     /// The bright green at the foot of the icon.
-    static let lime = Color(red: 0.816, green: 0.973, blue: 0.471)
+    static let lime = Color(red: 0.831, green: 0.984, blue: 0.475)  // #D4FB79, the accent
     /// The olive halfway up the icon, dark enough to read on white.
     static let olive = Color(red: 0.376, green: 0.447, blue: 0.216)
     /// The near-black at the top of the icon, for a word on the lime.
