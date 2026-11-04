@@ -40,6 +40,14 @@ struct DeveloperSettingsPage: View {
             } footer: {
                 Text("The sheet a first run gets.")
             }
+            Section {
+                Toggle("Blur controls", isOn: Binding(
+                    get: { BlurTuning.shared.showing },
+                    set: { BlurTuning.shared.showing = $0 }))
+            } footer: {
+                Text("Sliders over the list for the blur under the record button. "
+                     + "Copy puts the numbers on the clipboard.")
+            }
             PagePreviewsSection()
             if let message {
                 Section {

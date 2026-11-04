@@ -673,9 +673,9 @@ struct FloatingRecordPane: View {
                 // by the colour it lived only in the thin band where the
                 // colour was neither gone nor opaque.
                 WashBlur(strength: held ? 1 : 0.6)
-                    .frame(height: height)
+                    .frame(height: height + extraBlurHeight)
                     .mask {
-                        VoiceWash(bars: bars, base: base, swell: Self.washSwell,
+                        VoiceWash(bars: bars, base: base + extraBlurHeight, swell: Self.washSwell,
                                   held: held, solid: true)
                     }
                     .allowsHitTesting(false)
@@ -693,6 +693,15 @@ struct FloatingRecordPane: View {
     private var bottomInset: CGFloat {
         #if os(iOS)
         safeArea.bottom
+        #else
+        0
+        #endif
+    }
+
+    /// Points the blur reaches above the colour. Tunable in debug builds.
+    private var extraBlurHeight: CGFloat {
+        #if DEBUG
+        CGFloat(BlurTuning.shared.extraHeight)
         #else
         0
         #endif
@@ -892,8 +901,21 @@ struct WashBlur: View {
     var strength: Double
 
     var body: some View {
-        #if canImport(BlurSwiftUI)
-        // Tuned on the phone with sliders, since removed: a wide
+        #if canImport(BlurSwiftUI) && DEBUG
+        // Tunable from Settings ▸ Developer ▸ Blur controls; the numbers
+        // chosen there go into the release branch below by hand.
+        let t = BlurTuning.shared
+        let boost = strength > 0.9 ? t.heldBoost : 1
+        VariableBlur(direction: .up)
+            .minimumBlurRadius(t.minimumRadius)
+            .maximumBlurRadius(t.maximumRadius * boost)
+            .blurMaximumRadiusInset(t.radiusInset > 0 ? .relative(fraction: t.radiusInset) : nil)
+            .dimmingAlpha(.interfaceStyle(lightModeAlpha: min(1, t.dimmingLight * boost),
+                                          darkModeAlpha: min(1, t.dimmingDark * boost)))
+            .dimmingClearExtension(.relative(fraction: t.clearExtension))
+            .dimmingFullColorInset(t.fullColorInset > 0 ? .relative(fraction: t.fullColorInset) : nil)
+        #elseif canImport(BlurSwiftUI)
+        // Tuned on the phone with the sliders in the debug build: a wide
         // radius, the dimming tint faint in light mode and full in dark,
         // and everything halved while a recording is held so the wash
         // itself carries that state.

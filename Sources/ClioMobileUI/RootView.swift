@@ -91,6 +91,14 @@ public struct RootView: View {
                     }
                 }
                 .animation(.smooth(duration: 0.3), value: model.capture.state == .transcribing)
+                .overlay(alignment: .top) {
+                    #if DEBUG
+                    if BlurTuning.shared.showing {
+                        BlurTuningPanel()
+                            .padding(.top, proxy.safeAreaInsets.top + 44)
+                    }
+                    #endif
+                }
                 // Outermost, so the wash and the button read it too.
                 .environment(\.safeAreaInsets, proxy.safeAreaInsets)
         }
