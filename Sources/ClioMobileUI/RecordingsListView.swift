@@ -437,8 +437,8 @@ struct RecordingRow: View {
     }
 
     /// One slot on the trailing edge, past the pill: the tick while rows
-    /// are being picked, the copy button otherwise, and nothing at all for
-    /// a recording with no transcript to take.
+    /// are being picked, the copy button otherwise, a cross for a recording
+    /// nothing was heard in, and nothing for one still waiting on its words.
     ///
     /// Always the same width, held even when it is empty. The three take
     /// different room — a circle is wider than the copy mark, and nothing
@@ -467,6 +467,13 @@ struct RecordingRow: View {
                 // recording.
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+            } else if recording.status == .nothingHeard {
+                // Nothing to copy, and the reason: a filled cross where the
+                // copy mark would be.
+                Image(systemName: "xmark.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Nothing was heard")
             } else {
                 Color.clear
             }
