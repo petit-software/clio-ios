@@ -44,15 +44,15 @@ final class BlurTuning {
             d.object(forKey: key) == nil ? fallback : d.double(forKey: key)
         }
         showing = d.bool(forKey: "blur.showing")
-        maximumRadius = value("blur.max", 10)
+        maximumRadius = value("blur.max", 21)
         minimumRadius = value("blur.min", 0)
         radiusInset = value("blur.inset", 0)
-        dimmingLight = value("blur.dimLight", 0.35)
-        dimmingDark = value("blur.dimDark", 0.2)
-        clearExtension = value("blur.clear", 0.25)
+        dimmingLight = value("blur.dimLight", 0.39)
+        dimmingDark = value("blur.dimDark", 1.0)
+        clearExtension = value("blur.clear", 0.27)
         fullColorInset = value("blur.full", 0)
         extraHeight = value("blur.extra", 0)
-        heldBoost = value("blur.held", 1.6)
+        heldBoost = value("blur.held", 0.5)
     }
 
     /// The numbers, one per line, to paste back.
@@ -73,9 +73,9 @@ final class BlurTuning {
     private func f(_ v: Double) -> String { String(format: "%.2f", v) }
 
     func reset() {
-        maximumRadius = 10; minimumRadius = 0; radiusInset = 0
-        dimmingLight = 0.35; dimmingDark = 0.2; clearExtension = 0.25; fullColorInset = 0
-        extraHeight = 0; heldBoost = 1.6
+        maximumRadius = 21; minimumRadius = 0; radiusInset = 0
+        dimmingLight = 0.39; dimmingDark = 1.0; clearExtension = 0.27; fullColorInset = 0
+        extraHeight = 0; heldBoost = 0.5
     }
 }
 

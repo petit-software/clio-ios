@@ -915,9 +915,15 @@ struct WashBlur: View {
             .dimmingClearExtension(.relative(fraction: t.clearExtension))
             .dimmingFullColorInset(t.fullColorInset > 0 ? .relative(fraction: t.fullColorInset) : nil)
         #elseif canImport(BlurSwiftUI)
+        // Tuned on the phone with the sliders in the debug build: a wide
+        // radius, the dimming tint faint in light mode and full in dark,
+        // and everything halved while a recording is held so the wash
+        // itself carries that state.
+        let boost = strength > 0.9 ? 0.5 : 1.0
         VariableBlur(direction: .up)
-            .maximumBlurRadius(10 * strength)
-            .dimmingAlpha(.interfaceStyle(lightModeAlpha: 0.35 * strength, darkModeAlpha: 0.2 * strength))
+            .maximumBlurRadius(21 * boost)
+            .dimmingAlpha(.interfaceStyle(lightModeAlpha: 0.39 * boost, darkModeAlpha: 1.0 * boost))
+            .dimmingClearExtension(.relative(fraction: 0.27))
         #else
         Rectangle()
             .fill(.regularMaterial)
