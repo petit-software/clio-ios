@@ -34,6 +34,10 @@ targets:
     sources:
       - path: Sources/ClioMobileApp
       - path: Resources/Assets.xcassets
+      # The Liquid Glass icon from Icon Composer, iOS 26 and later. Named
+      # after the catalog's AppIcon set, which stays as the fallback.
+      - path: Resources/AppIcon.icon
+        buildPhase: resources
       - path: Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
       - path: Resources/Clio.entitlements
