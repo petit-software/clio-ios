@@ -33,7 +33,9 @@ struct IntroView: View {
                         }
                         point("Turn speech into text",
                               "Get readable transcripts from your recordings.") {
-                            Image(systemName: "text.alignleft")
+                            Image("IntroChat")
+                                .resizable()
+                                .frame(width: 24, height: 24)
                         }
                         point("Summarize your way",
                               "Create summaries with your preferred format.") {
