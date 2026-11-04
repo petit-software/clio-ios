@@ -1,7 +1,7 @@
 import ClioMobileCore
 import SwiftUI
 
-/// The first run: what Clio is, in a sheet over the library. A title,
+/// The first run: what Clio is, in a sheet over the library. The mark, a title,
 /// four things worth knowing, and Whisper Small to
 /// download — the same row as on Settings ▸ Models. Continue waits for a
 /// model: nothing can be transcribed without one, so the sheet does not
@@ -23,10 +23,17 @@ struct IntroView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 28) {
+                    // The mark, in the text colour, where the icon was.
+                    Image("IntroMark")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: 44)
+                        .foregroundStyle(.primary)
+                        .padding(.top, 64)
+                        .accessibilityLabel("Clio")
                     Text("Record, transcribe, and summarize what matters.")
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
-                        .padding(.top, 64)
                     VStack(alignment: .leading, spacing: 22) {
                         point("Record with ease",
                               "Capture thoughts, meetings, and conversations.") {
