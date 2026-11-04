@@ -22,7 +22,7 @@ struct IntroView: View {
             ScrollView {
                 VStack(spacing: 28) {
                     AppHeader(hairline: true)
-                        .padding(.top, 36)
+                        .padding(.top, 64)
                     Text("Record, transcribe, and summarize what matters.")
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)

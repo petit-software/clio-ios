@@ -168,7 +168,7 @@ struct SettingsView: View {
             }
         }
         // Every toggle, slider and stepper on these pages in the app's
-        // colour: olive on light, lime on dark. Explicit, not left to the
+        // colour: the lime, darker on light.  Explicit, not left to the
         // catalog's global accent.
         .tint(Color.accentColor)
     }
@@ -577,14 +577,24 @@ struct SettingsView: View {
 /// home-screen icon is that artwork with its corners filled for iOS's own
 /// mask, and clipping that back leaves a seam.
 struct AppHeader: View {
+    /// A hairline on the icon's edge, where the artwork's white bottom
+    /// would otherwise run into the sheet.
+    var hairline = false
+
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         VStack(spacing: 12) {
             // The icon's artwork, square; the corners are the phone's.
             Image("SettingsIcon")
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 88, height: 88)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .clipShape(shape)
+                .overlay {
+                    if hairline {
+                        shape.strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5)
+                    }
+                }
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
         }
         .frame(maxWidth: .infinity)
