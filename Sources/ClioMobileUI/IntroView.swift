@@ -28,11 +28,17 @@ struct IntroView: View {
                         .multilineTextAlignment(.center)
                     VStack(alignment: .leading, spacing: 22) {
                         point("Record with ease",
-                              "Capture thoughts, meetings, and conversations.")
+                              "Capture thoughts, meetings, and conversations.") {
+                            RecordGlyph()
+                        }
                         point("Turn speech into text",
-                              "Get readable transcripts from your recordings.")
+                              "Get readable transcripts from your recordings.") {
+                            Image(systemName: "text.alignleft")
+                        }
                         point("Summarize your way",
-                              "Create summaries with your preferred format.")
+                              "Create summaries with your preferred format.") {
+                            Image(systemName: "sparkles")
+                        }
                     }
                     .padding(.horizontal, 8)
                     if let whisperSmall {
@@ -76,12 +82,39 @@ struct IntroView: View {
         .interactiveDismissDisabled(!hasModel)
     }
 
-    private func point(_ title: LocalizedStringKey, _ text: LocalizedStringKey) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.headline)
-            Text(text).font(.subheadline).foregroundStyle(.secondary)
+    private func point<Glyph: View>(_ title: LocalizedStringKey, _ text: LocalizedStringKey,
+                                    @ViewBuilder glyph: () -> Glyph) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            glyph()
+                .font(.title2)
+                .foregroundStyle(.tint)
+                .frame(width: 36, height: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(text).font(.subheadline).foregroundStyle(.secondary)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The record glyph as given: a ring with a dot, on a 24-point grid — the
+/// ring's stroke a twelfth of the box, the dot a third of it. Drawn, not
+/// an asset, so it takes the tint like the symbols beside it.
+struct RecordGlyph: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            ZStack {
+                Circle()
+                    .strokeBorder(lineWidth: side / 12)
+                    .frame(width: side * 20 / 24, height: side * 20 / 24)
+                Circle()
+                    .frame(width: side / 3, height: side / 3)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .frame(width: 24, height: 24)
     }
 }
 
