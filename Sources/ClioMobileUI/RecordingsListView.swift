@@ -915,15 +915,15 @@ struct WashBlur: View {
             .dimmingClearExtension(.relative(fraction: t.clearExtension))
             .dimmingFullColorInset(t.fullColorInset > 0 ? .relative(fraction: t.fullColorInset) : nil)
         #elseif canImport(BlurSwiftUI)
-        // Tuned on the phone with the sliders in the debug build: a wide
-        // radius, the dimming tint faint in light mode and full in dark,
-        // and everything halved while a recording is held so the wash
-        // itself carries that state.
+        // Tuned on the phone with the sliders in the debug build: a modest
+        // radius with a trace of blur the whole way up, the dimming tint
+        // strong in both appearances, and everything halved while a
+        // recording is held so the wash itself carries that state.
         let boost = strength > 0.9 ? 0.5 : 1.0
         VariableBlur(direction: .up)
-            .maximumBlurRadius(21 * boost)
-            .dimmingAlpha(.interfaceStyle(lightModeAlpha: 0.39 * boost, darkModeAlpha: 1.0 * boost))
-            .dimmingClearExtension(.relative(fraction: 0.27))
+            .minimumBlurRadius(1.36)
+            .maximumBlurRadius(13.8 * boost)
+            .dimmingAlpha(.interfaceStyle(lightModeAlpha: 0.9 * boost, darkModeAlpha: 0.9 * boost))
         #else
         Rectangle()
             .fill(.regularMaterial)
@@ -972,8 +972,9 @@ struct FloatingRecordButton: View {
             .font(.callout.weight(.semibold))
             .monospacedDigit()
             .contentTransition(.numericText())
-        // Plain: black on white glass in light mode, white on black in dark.
-        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+        // Plain, against the appearance: white on black glass in light
+        // mode, black on white in dark.
+        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
         // Quiet while the transcript is written: the pill at the top says so.
         .opacity(capture.state == .transcribing ? 0.5 : 1)
         .frame(maxWidth: .infinity)
@@ -1222,18 +1223,18 @@ private extension Color {
 
 private extension View {
     /// Liquid Glass on iOS 26, so the wash and the rows show through the
-    /// capsule under the word: white in light mode, near-black in dark. A
+    /// capsule under the word: black in light mode, white in dark. A
     /// plain fill before iOS 26.
     @ViewBuilder
     func capsuleGlass(dark: Bool, dimmed: Bool) -> some View {
-        let tint = dark ? Accent.ink : Color.white
+        let tint = dark ? Color.white : Color.black
         if #available(iOS 26, macOS 26, *) {
             glassEffect(.regular.tint(tint.opacity(dimmed ? 0.6 : 0.85)).interactive(),
                         in: Capsule(style: .continuous))
         } else {
             background(dimmed ? tint.opacity(0.85) : tint,
                        in: Capsule(style: .continuous))
-                .shadow(color: .black.opacity(dark ? 0.4 : 0.15), radius: 12, y: 6)
+                .shadow(color: .black.opacity(dark ? 0.15 : 0.4), radius: 12, y: 6)
         }
     }
 }
