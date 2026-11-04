@@ -160,7 +160,7 @@ public enum LanguageModelCatalog {
             approximateBytes: 351_000_000,
             tier: .fast,
             languages: .multilingual,
-            note: "Smallest; fits a phone with 4 GB. Stays close to the words said, summarizes little. Apache 2.0.",
+            note: "Smallest. Stays close to the words said.",
             memoryBytes: 1_200_000_000),
         CatalogModel(
             id: "Qwen3-1.7B-4bit",
@@ -169,7 +169,7 @@ public enum LanguageModelCatalog {
             approximateBytes: 984_000_000,
             tier: .balanced,
             languages: .multilingual,
-            note: "The one to start with. Real summaries, English and Dutch. Apache 2.0.",
+            note: "The one to start with.",
             memoryBytes: 2_300_000_000),
     ]
 

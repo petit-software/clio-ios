@@ -98,7 +98,22 @@ public final class AppModel {
     public func select(summaryModel choice: SummaryModelChoice) {
         guard settings.settings.summaryModel != choice else { return }
         settings.settings.summaryModel = choice
-        Task { await intelligence.refreshAvailability() }
+        // A resident model is the old pick; drop it so the next summary
+        // loads the new one rather than reusing the old.
+        Task {
+            await summaries.local?.unload()
+            await intelligence.refreshAvailability()
+        }
+    }
+
+    /// "Keep models in memory" turned off: whatever is resident goes now,
+    /// not after the next use.
+    public func releaseModelsIfNotKept() {
+        guard !settings.settings.keepModelInMemory else { return }
+        Task {
+            await capture.unloadModel()
+            await summaries.local?.unload()
+        }
     }
 
     /// The user picked a model. Stored, and the resident one is dropped so

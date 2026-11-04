@@ -86,6 +86,7 @@ private struct PreviewCaseList: View {
             }
         }
         .navigationTitle(title)
+        .softScrollEdges()
     }
 }
 

@@ -46,7 +46,7 @@ struct SummaryRouterTests {
     @MainActor
     func localByChoice() async throws {
         let qwen = qwen
-        let (router, apple, local, _) = make(choice: .local(id: qwen.id), installed: [qwen])
+        let (router, apple, local, store) = make(choice: .local(id: qwen.id), installed: [qwen])
         #expect(await router.availability == .available)
         let request = SummaryRequest(transcript: transcript, language: "nl",
                                      preferences: SummaryPreferences(format: .bullets, length: .brief))
@@ -55,6 +55,12 @@ struct SummaryRouterTests {
         #expect(await local.lastModel == qwen)
         #expect(await apple.lastRequest == nil)
         #expect(summary.summary.contains("Qwen3 0.6B"))
+        #expect(await local.lastKeepLoaded == true, "Keep models in memory is on by default")
+
+        // The same switch as Whisper's, read on each call.
+        store.settings.keepModelInMemory = false
+        _ = try await router.summarize(request)
+        #expect(await local.lastKeepLoaded == false)
     }
 
     @Test("No Apple Intelligence and a model downloaded: the choice moves to the model")

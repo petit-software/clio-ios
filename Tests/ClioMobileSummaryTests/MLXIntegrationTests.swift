@@ -75,7 +75,7 @@ struct MLXIntegrationTests {
             let started = ContinuousClock.now
             let summary = try await engine.summarize(
                 SummaryRequest(transcript: transcript, language: "en", preferences: preferences),
-                using: installed)
+                using: installed, keepLoaded: true)
             let took = ContinuousClock.now - started
             print("[mlx] \(name) in \(took): title \"\(summary.title)\"")
             print("[mlx] \(summary.summary.replacingOccurrences(of: "\n", with: " ⏎ "))")
@@ -111,7 +111,7 @@ struct MLXIntegrationTests {
             tweede offerte. En de balkondeur klemt nog steeds als het warm is.
             """
         let summary = try await engine.summarize(
-            SummaryRequest(transcript: dutch, language: "nl"), using: installed)
+            SummaryRequest(transcript: dutch, language: "nl"), using: installed, keepLoaded: false)
         print("[mlx] nl title: \(summary.title)")
         print("[mlx] nl summary: \(summary.summary.replacingOccurrences(of: "\n", with: " ⏎ "))")
         #expect(!summary.title.isEmpty)

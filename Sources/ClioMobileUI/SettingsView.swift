@@ -40,9 +40,7 @@ struct SettingsView: View {
                 Section {
                     // By value, so the row and the library's banner both
                     // arrive through the same destination below.
-                    NavigationLink(value: SettingsPage.model) {
-                        LabeledContent("Models", value: modelNames)
-                    }
+                    NavigationLink("Models", value: SettingsPage.model)
                 } footer: {
                     Text("Which Whisper model transcribes and which language model writes "
                          + "summaries; downloading and deleting them.")
@@ -71,6 +69,7 @@ struct SettingsView: View {
                         ForEach(Appearance.allCases, id: \.self) { Text($0.name).tag($0) }
                     }
                     .pickerStyle(.menu)
+                    .greyMenu()
                 } footer: {
                     Text("Light, dark, or whatever the phone is set to.")
                 }
@@ -158,19 +157,10 @@ struct SettingsView: View {
         NavigationLink {
             Form { content() }
                 .navigationTitle(title)
+                .softScrollEdges()
         } label: {
             LabeledContent(title, value: value)
         }
-    }
-
-    /// The transcription model and the summary model, on the row.
-    private var modelNames: String {
-        let whisper = model.capture.activeModel?.displayName ?? "None"
-        let summary: String = switch model.settings.settings.summaryModel {
-        case .apple: "Apple Intelligence"
-        case .local(let id): model.languageModels.displayName(for: id)
-        }
-        return "\(whisper) · \(summary)"
     }
 
     private func textSummary(_ store: SettingsStore) -> String {
@@ -201,6 +191,7 @@ struct SettingsView: View {
                     Text(language.name).tag(language.id)
                 }
             }
+            .greyMenu()
             Toggle("Translate to English", isOn: Binding(
                 get: { store.settings.translateToEnglish },
                 set: { store.settings.translateToEnglish = $0 }))
@@ -323,16 +314,19 @@ struct SettingsView: View {
                 set: { store.settings.summaryPreferences.noteType = $0 })) {
                 ForEach(NoteType.allCases, id: \.self) { Text($0.name).tag($0) }
             }
+            .greyMenu()
             Picker("Format", selection: Binding(
                 get: { store.settings.summaryPreferences.format },
                 set: { store.settings.summaryPreferences.format = $0 })) {
                 ForEach(SummaryFormat.allCases, id: \.self) { Text($0.name).tag($0) }
             }
+            .greyMenu()
             Picker("Length", selection: Binding(
                 get: { store.settings.summaryPreferences.length },
                 set: { store.settings.summaryPreferences.length = $0 })) {
                 ForEach(SummaryLength.allCases, id: \.self) { Text($0.name).tag($0) }
             }
+            .greyMenu()
             NavigationLink {
                 SummaryInstructionsEditor()
             } label: {
@@ -566,6 +560,7 @@ struct VocabularyEditor: View {
             }
         }
         .navigationTitle("Custom Vocabulary")
+        .softScrollEdges()
         .onAppear { text = model.settings.settings.customVocabulary.joined(separator: "\n") }
         .onChange(of: text) { _, newValue in
             model.settings.settings.customVocabulary = newValue
@@ -619,6 +614,7 @@ struct SummaryInstructionsEditor: View {
             }
         }
         .navigationTitle("Instructions")
+        .softScrollEdges()
         .onAppear {
             text = model.settings.settings.summaryPreferences.instructions
             loaded = true
@@ -663,6 +659,7 @@ struct ReplacementsEditor: View {
             }
         }
         .navigationTitle("Word Replacements")
+        .softScrollEdges()
     }
 }
 
@@ -686,6 +683,12 @@ struct ReplacementsEditor: View {
 }
 
 extension View {
+    /// A menu picker's value and chevrons in grey, not the accent blue:
+    /// a setting's current value is information, not a link.
+    func greyMenu() -> some View {
+        tint(.secondary)
+    }
+
     /// The bars fade the content under them instead of cutting it: iOS
     /// 26's soft scroll-edge effect, on every edge.
     @ViewBuilder

@@ -4,12 +4,29 @@ import SwiftUI
 /// Settings ▸ Models, as its own page: the transcription models, then the
 /// summarization models.
 struct ModelSettingsPage: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         Form {
             ModelSection()
             SummaryModelSection()
+            Section {
+                Toggle("Keep models in memory", isOn: Binding(
+                    get: { model.settings.settings.keepModelInMemory },
+                    set: {
+                        model.settings.settings.keepModelInMemory = $0
+                        model.releaseModelsIfNotKept()
+                    }))
+            } footer: {
+                Text(model.settings.settings.keepModelInMemory
+                     ? "The transcription model and the summary model stay loaded "
+                       + "between recordings, so both start at once."
+                     : "Each model is loaded when needed and released after, which "
+                       + "saves memory and costs a few seconds each time.")
+            }
         }
         .navigationTitle("Models")
+        .softScrollEdges()
     }
 }
 
@@ -28,9 +45,6 @@ struct ModelSection: View {
                     model.select(model: entry.id)
                 }
             }
-            Toggle("Keep model in memory", isOn: Binding(
-                get: { model.settings.settings.keepModelInMemory },
-                set: { model.settings.settings.keepModelInMemory = $0 }))
         } header: {
             Text("Transcription")
         } footer: {
@@ -45,11 +59,7 @@ struct ModelSection: View {
             return "Download a model to transcribe. Whisper Small is the one to start "
                  + "with. " + base
         }
-        let kept = model.settings.settings.keepModelInMemory
-            ? "The model stays loaded between recordings, so transcription starts at once."
-            : "The model is loaded for each transcription and released after, which "
-              + "saves memory and costs a few seconds per recording."
-        return base + " " + kept
+        return base
     }
 }
 
@@ -78,8 +88,7 @@ struct SummaryModelSection: View {
         } footer: {
             Text(device.isSupported
                  ? "Downloaded once from Hugging Face, then run on this phone's GPU. "
-                   + "A model is loaded for each summary and released after. Nothing "
-                   + "you record is ever uploaded."
+                   + "Both under Apache 2.0. Nothing you record is ever uploaded."
                  : (device.reason ?? "") + " Apple Intelligence is the only option here.")
         }
     }
@@ -198,11 +207,6 @@ struct ModelRow: View {
         }
         var parts = ["\(Format.bytes(entry.approximateBytes))", entry.languages.label,
                      entry.tier.label]
-        if let memory = entry.memoryBytes {
-            let formatter = ByteCountFormatter()
-            formatter.countStyle = .memory
-            parts.append("needs about \(formatter.string(fromByteCount: memory)) of memory")
-        }
         if let note = entry.note { parts.append(note) }
         return parts.joined(separator: " · ")
     }

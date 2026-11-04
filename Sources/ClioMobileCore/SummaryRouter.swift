@@ -14,9 +14,12 @@ public enum SummaryModelChoice: Codable, Equatable, Hashable, Sendable {
 public protocol LocalSummaryEngine: AnyObject, Sendable {
     /// Whether this device can run any downloaded model.
     var deviceSupport: LanguageModelSupport.Verdict { get }
-    /// Load the model if it is not loaded, write the title and notes with
-    /// the shared prompt, and give the memory back.
-    func summarize(_ request: SummaryRequest, using model: InstalledModel) async throws -> TranscriptSummary
+    /// Load the model if it is not loaded and write the title and notes
+    /// with the shared prompt. `keepLoaded` is Settings' "Keep models in
+    /// memory": on, the model stays for the next summary; off, the memory
+    /// is given back as soon as the words are in.
+    func summarize(_ request: SummaryRequest, using model: InstalledModel,
+                   keepLoaded: Bool) async throws -> TranscriptSummary
     func unload() async
 }
 
@@ -74,7 +77,8 @@ public final class SummaryRouter: SummaryEngine, @unchecked Sendable {
             return try await apple.summarize(request)
         case .local(let model):
             guard let local else { throw SummaryEngineError.unavailable(Self.noLocalEngine) }
-            return try await local.summarize(request, using: model)
+            let keep = await MainActor.run { settings.settings.keepModelInMemory }
+            return try await local.summarize(request, using: model, keepLoaded: keep)
         case .none(let reason):
             throw SummaryEngineError.unavailable(reason)
         }
@@ -160,6 +164,7 @@ public actor StubLocalSummaryEngine: LocalSummaryEngine {
     private let failure: Error?
     public private(set) var lastRequest: SummaryRequest?
     public private(set) var lastModel: InstalledModel?
+    public private(set) var lastKeepLoaded: Bool?
     public private(set) var unloadCount = 0
 
     public init(deviceSupport: LanguageModelSupport.Verdict = .supported, failure: Error? = nil) {
@@ -167,9 +172,11 @@ public actor StubLocalSummaryEngine: LocalSummaryEngine {
         self.failure = failure
     }
 
-    public func summarize(_ request: SummaryRequest, using model: InstalledModel) async throws -> TranscriptSummary {
+    public func summarize(_ request: SummaryRequest, using model: InstalledModel,
+                          keepLoaded: Bool) async throws -> TranscriptSummary {
         lastRequest = request
         lastModel = model
+        lastKeepLoaded = keepLoaded
         if let failure { throw failure }
         let words = request.transcript.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
         return TranscriptSummary(

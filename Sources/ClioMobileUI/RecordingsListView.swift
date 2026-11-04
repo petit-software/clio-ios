@@ -582,8 +582,10 @@ struct FloatingRecordPane: View {
     /// voice adds to it: the recording has to be visible from across the
     /// room, not only heard in the meter.
     static let washWhileHeld: CGFloat = 80
-    /// How much taller again at full voice, in hold-to-record.
-    static let washSwell: CGFloat = 150
+    /// How much taller again at full voice, in hold-to-record. Large: the
+    /// wash is the only meter while the finger is down, and it has to be
+    /// seen moving from arm's length, not studied.
+    static let washSwell: CGFloat = 260
 
     var body: some View {
         if !searching {
@@ -679,8 +681,10 @@ final class WashMeter {
     private var last: Date?
 
     /// Stiffness, as the spring's natural frequency in radians a second.
-    static let rise = 26.0
-    static let fall = 11.0
+    /// Quick up, so a syllable is a visible jump; slower down, so the edge
+    /// settles rather than drops.
+    static let rise = 36.0
+    static let fall = 12.0
 
     /// An empty target is silence: every bar back to rest.
     func step(toward target: [Float], at date: Date) -> BarVector {
@@ -763,7 +767,11 @@ struct VoiceWash: View, @preconcurrency Animatable {
     }
 
     /// Below this a bar is silence: the edge does not move for a breath.
-    static let floor = 0.06
+    static let floor = 0.04
+    /// The bars are lifted before they are drawn — a root — so ordinary
+    /// speech, which the analyser puts around a third, moves the edge by
+    /// more than half, and only a whisper stays near the floor.
+    static let lift = 0.6
     /// How far down the wash the fade runs before the colour is solid.
     static let fadeEnd = 1.0
     /// The ease-in's power. Higher keeps the colour faint further down:
@@ -819,7 +827,7 @@ struct VoiceWash: View, @preconcurrency Animatable {
     /// The bars above the floor, each blended with its neighbours so a
     /// loud one makes a hill and not a flame.
     static func smoothed(_ bars: [Double]) -> [CGFloat] {
-        let raw = bars.map { max(0, ($0 - floor) / (1 - floor)) }
+        let raw = bars.map { pow(max(0, ($0 - floor) / (1 - floor)), lift) }
         return raw.indices.map { i in
             let left = i > 0 ? raw[i - 1] : raw[i]
             let right = i + 1 < raw.count ? raw[i + 1] : raw[i]
@@ -869,7 +877,6 @@ struct FloatingRecordButton: View {
     var onRecord: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pressing = false
 
     var body: some View {
@@ -896,19 +903,10 @@ struct FloatingRecordButton: View {
     }
 
     private func label(_ capture: CaptureController) -> some View {
-        // A red dot beside the word while it records, so the state reads
-        // at a glance in light mode too, where the glass is white on lime
-        // and the word alone is quiet.
-        HStack(spacing: 8) {
-            if capture.state.isCapturing {
-                RecordingDot(pulsing: !reduceMotion && capture.state == .recording)
-                    .font(.caption)
-            }
-            Text(title(capture))
-                .font(.callout.weight(.semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-        }
+        Text(title(capture))
+            .font(.callout.weight(.semibold))
+            .monospacedDigit()
+            .contentTransition(.numericText())
         // Plain: black on white glass in light mode, white on black in dark.
         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
         // Quiet while the transcript is written: the pill at the top says so.
@@ -1023,15 +1021,10 @@ struct HoldRecordButton: View {
     var body: some View {
         let capture = model.capture
         VStack(spacing: 2) {
-            HStack(spacing: 8) {
-                if capture.state.isCapturing {
-                    RecordingDot(pulsing: capture.state == .recording).font(.footnote)
-                }
-                Text(title(capture))
-                    .font(.title2.weight(.semibold))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-            }
+            Text(title(capture))
+                .font(.title2.weight(.semibold))
+                .monospacedDigit()
+                .contentTransition(.numericText())
             if let subtitle = subtitle(capture) {
                 Text(subtitle)
                     .font(.footnote)

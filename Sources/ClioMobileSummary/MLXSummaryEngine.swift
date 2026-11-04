@@ -19,9 +19,10 @@ import MLXLMCommon
 /// or skipped the line; asked one thing at a time it manages both. The
 /// second call is a short prompt and five words, a fraction of the first.
 ///
-/// The model is loaded for each summary and released after: a gigabyte
-/// of weights is not kept resident on a phone with four. The GPU buffer
-/// cache is capped small for the same reason.
+/// Whether the model stays loaded between summaries is Settings' "Keep
+/// models in memory", the same switch as Whisper's: off, a gigabyte of
+/// weights is not kept resident on a phone with four. The GPU buffer cache
+/// is capped small either way.
 public actor MLXSummaryEngine: LocalSummaryEngine {
 
     private var container: ModelContainer?
@@ -38,7 +39,8 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
     /// that will not stop.
     static let maxTokens = 700
 
-    public func summarize(_ request: SummaryRequest, using model: InstalledModel) async throws -> TranscriptSummary {
+    public func summarize(_ request: SummaryRequest, using model: InstalledModel,
+                          keepLoaded: Bool) async throws -> TranscriptSummary {
         #if targetEnvironment(simulator)
         throw SummaryEngineError.unavailable("Downloaded models do not run on the simulator.")
         #else
@@ -46,7 +48,7 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
             throw SummaryEngineError.unavailable(reason)
         }
         let container = try await load(model)
-        defer { Task { await self.unload() } }
+        defer { if !keepLoaded { Task { await self.unload() } } }
 
         // The notes. Any "Title:" line the model adds of its own accord is
         // taken off by `parse`.
