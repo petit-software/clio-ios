@@ -727,6 +727,7 @@ struct PlayerCard: View {
                     if !editing { player.seek(to: player.currentTime) }
                 }
                 .disabled(!player.isAvailable)
+                .tint(Color.accentColor)
 
                 HStack {
                     Text(Format.duration(player.currentTime)).monospacedDigit()

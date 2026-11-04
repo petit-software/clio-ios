@@ -114,6 +114,7 @@ struct BlurTuningPanel: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.horizontal, 12)
         .font(.caption)
+        .tint(Color.accentColor)
     }
 
     private func slider(_ name: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {

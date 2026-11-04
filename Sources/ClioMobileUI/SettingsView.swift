@@ -167,6 +167,10 @@ struct SettingsView: View {
                 }
             }
         }
+        // Every toggle, slider and stepper on these pages in the app's
+        // colour: olive on light, lime on dark. Explicit, not left to the
+        // catalog's global accent.
+        .tint(Color.accentColor)
     }
 
     // MARK: Rows and pages
