@@ -20,89 +20,91 @@ struct IntroView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 28) {
-                    // The mark, in a light grey, where the icon was.
-                    Image("IntroMark")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 44)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 88)
-                        .padding(.bottom, 16)
-                        .accessibilityLabel("Clio")
-                    Text("Record, transcribe, and summarize what matters.")
-                        .font(.title2.weight(.bold))
-                        .multilineTextAlignment(.center)
-                    VStack(alignment: .leading, spacing: 22) {
-                        point("Record with ease",
-                              "Capture thoughts, meetings, and conversations.") {
-                            RecordGlyph()
-                        }
-                        point("Turn speech into text",
-                              "Get readable transcripts from your recordings.") {
-                            Image("IntroChat")
-                                .resizable()
-                                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                        }
-                        point("Summarize your way",
-                              "Create summaries with your preferred format.") {
-                            // The thinking head, as given, from the catalog.
-                            Image("IntroThink")
-                                .resizable()
-                                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                        }
-                        point("Private by design",
-                              "Audio, transcripts, and summaries never leave it.") {
-                            Image("IntroLock")
-                                .resizable()
-                                .frame(width: Self.glyphSize, height: Self.glyphSize)
-                        }
-                        // The one thing to do before the first recording,
-                        // with the Models page's own control at the end.
-                        if let whisperSmall {
-                            HStack(alignment: .center, spacing: 16) {
-                                point("Download a model",
-                                      "Whisper Small, \(Format.bytes(whisperSmall.approximateBytes)), once.") {
-                                    Image("IntroModel")
-                                        .resizable()
-                                        .frame(width: Self.glyphSize, height: Self.glyphSize)
-                                }
-                                Spacer(minLength: 8)
-                                ModelActionSlot(entry: whisperSmall, manager: model.models,
-                                                isActive: model.capture.activeModel?.id == whisperSmall.id)
-                                    .frame(width: ModelRow.slot, height: ModelRow.slot)
-                            }
-                            .padding(16)
-                            .background(Color.secondary.opacity(0.08),
-                                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            // Out past the list's edges by its own inset, so
-                            // the glyph inside lines up with the ones above.
-                            .padding(.horizontal, -16)
-                        }
+        ScrollView {
+            VStack(spacing: 28) {
+                // The mark, in a light grey, where the icon was.
+                Image("IntroMark")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 44)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 88)
+                    .padding(.bottom, 16)
+                    .accessibilityLabel("Clio")
+                Text("Record, transcribe, and summarize what matters.")
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 22) {
+                    point("Record with ease",
+                          "Capture thoughts, meetings, and conversations.") {
+                        RecordGlyph()
                     }
-                    .padding(.horizontal, 8)
+                    point("Turn speech into text",
+                          "Get readable transcripts from your recordings.") {
+                        Image("IntroChat")
+                            .resizable()
+                            .frame(width: Self.glyphSize, height: Self.glyphSize)
+                    }
+                    point("Summarize your way",
+                          "Create summaries with your preferred format.") {
+                        // The thinking head, as given, from the catalog.
+                        Image("IntroThink")
+                            .resizable()
+                            .frame(width: Self.glyphSize, height: Self.glyphSize)
+                    }
+                    point("Private by design",
+                          "Audio, transcripts, and summaries never leave it.") {
+                        Image("IntroLock")
+                            .resizable()
+                            .frame(width: Self.glyphSize, height: Self.glyphSize)
+                    }
+                    // The one thing to do before the first recording,
+                    // with the Models page's own control at the end.
+                    if let whisperSmall {
+                        HStack(alignment: .center, spacing: 16) {
+                            point("Download a model",
+                                  "Whisper Small, \(Format.bytes(whisperSmall.approximateBytes)), once.") {
+                                Image("IntroModel")
+                                    .resizable()
+                                    .frame(width: Self.glyphSize, height: Self.glyphSize)
+                            }
+                            Spacer(minLength: 8)
+                            ModelActionSlot(entry: whisperSmall, manager: model.models,
+                                            isActive: model.capture.activeModel?.id == whisperSmall.id)
+                                .frame(width: ModelRow.slot, height: ModelRow.slot)
+                        }
+                        .padding(16)
+                        .background(Color.secondary.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        // Out past the list's edges by its own inset, so
+                        // the glyph inside lines up with the ones above.
+                        .padding(.horizontal, -16)
+                    }
                 }
-                .padding(.horizontal, 28)
-                .padding(.bottom, 24)
+                .padding(.horizontal, 8)
             }
-            // Black in light mode, white in dark, like the record button.
+            .padding(.horizontal, 28)
+            .padding(.bottom, 24)
+    }
+        .softScrollEdges()
+        .safeAreaInset(edge: .bottom) {
+            // The system's prominent button, extra large, in the bottom
+            // inset: black in light mode, white in dark, like the record
+            // button.
             Button(action: onContinue) {
                 Text("Continue")
                     .font(.headline)
                     .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .contentShape(Capsule(style: .continuous))
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
-            .background(colorScheme == .dark ? Color.white : Color.black,
-                        in: Capsule(style: .continuous))
+            .prominentCapsule()
+            .controlSize(.extraLarge)
+            .tint(colorScheme == .dark ? Color.white : Color.black)
             .disabled(!hasModel)
             .opacity(hasModel ? 1 : 0.4)
             .animation(.default, value: hasModel)
-            .padding(.horizontal, 28)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
         }
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(!hasModel)
@@ -154,4 +156,16 @@ struct RecordGlyph: View {
 #Preview("Model installed") {
     Text("Library").sheet(isPresented: .constant(true)) { IntroView {} }
         .environment(AppModel.simulating())
+}
+
+private extension View {
+    /// Liquid Glass's prominent button on iOS 26, the bordered one before.
+    @ViewBuilder
+    func prominentCapsule() -> some View {
+        if #available(iOS 26, macOS 26, *) {
+            buttonStyle(.glassProminent).buttonBorderShape(.capsule)
+        } else {
+            buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+        }
+    }
 }
