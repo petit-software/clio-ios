@@ -28,6 +28,14 @@ struct DeveloperSettingsPage: View {
                      + "Audio is a synthesized tone. Delete them in About.")
             }
             Section {
+                Toggle("Demo mode", isOn: Binding(
+                    get: { model.settings.settings.demoMode },
+                    set: { model.setDemoMode($0) }))
+            } footer: {
+                Text("Sample recordings in place of yours, for showing the app. "
+                     + "Nothing you have recorded is changed; turn it off and they are back.")
+            }
+            Section {
                 Button("Show Intro") { AppActions.shared.pending = .showIntro }
             } footer: {
                 Text("The sheet a first run gets.")

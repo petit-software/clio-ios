@@ -97,14 +97,6 @@ struct SettingsView: View {
                     Text("What Clio is keeping on this phone, and how to remove it.")
                 }
                 Section {
-                    Toggle("Demo mode", isOn: Binding(
-                        get: { store.settings.demoMode },
-                        set: { model.setDemoMode($0) }))
-                } footer: {
-                    Text("Sample recordings in place of yours, for showing the app. "
-                         + "Nothing you have recorded is changed; turn it off and they are back.")
-                }
-                Section {
                     LabeledContent("Version", value: Self.version)
                     Link(destination: Self.macApp) {
                         HStack {
