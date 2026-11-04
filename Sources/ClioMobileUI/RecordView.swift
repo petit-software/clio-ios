@@ -24,10 +24,9 @@ struct RecordView: View {
     private let onClose: () -> Void
 
     /// The controls' height and fills: the capsules the sheet has had all
-    /// along, on fills that follow the appearance. The main action is the
-    /// home record button's colour: black in light mode, white in dark,
-    /// with the text the other way; not the system red, which read as a
-    /// warning on a button that saves.
+    /// along, on fills that follow the appearance. Stop is red, the word
+    /// alone; Try Again is the home record button's colour: black in
+    /// light mode, white in dark, with the text the other way.
     static let actionHeight: CGFloat = 52
     private var primaryFill: Color { colorScheme == .dark ? .white : .black }
     private var primaryText: Color { colorScheme == .dark ? .black : .white }
@@ -171,15 +170,15 @@ struct RecordView: View {
                 Button {
                     Task { await stop() }
                 } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    Text("Stop")
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(canStop ? primaryText : Color.secondary.opacity(0.5))
+                        .foregroundStyle(canStop ? Color.white : Color.secondary.opacity(0.5))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
                         .contentShape(Capsule(style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .background(canStop ? primaryFill : inertFill,
+                .background(canStop ? Color.red : inertFill,
                             in: Capsule(style: .continuous))
                 .disabled(!canStop)
                 .accessibilityLabel("Stop recording")
