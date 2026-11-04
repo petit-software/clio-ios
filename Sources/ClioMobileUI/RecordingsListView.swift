@@ -604,7 +604,7 @@ struct FloatingRecordPane: View {
     @State private var animating = false
 
     /// How far above the button the wash reaches before it is gone.
-    static let washAboveButton: CGFloat = 60
+    static let washAboveButton: CGFloat = 40
     static let buttonHeight: CGFloat = 56
     static let buttonBottomPadding: CGFloat = 12
 
