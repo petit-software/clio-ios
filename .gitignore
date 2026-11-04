@@ -11,3 +11,6 @@ DerivedData/
 build/
 *.xcarchive
 *.ipa
+
+# Personal Claude Code permissions
+.claude/settings.local.json
