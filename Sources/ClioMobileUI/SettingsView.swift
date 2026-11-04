@@ -579,10 +579,12 @@ struct SettingsView: View {
 struct AppHeader: View {
     var body: some View {
         VStack(spacing: 12) {
+            // The icon's artwork, square; the corners are the phone's.
             Image("SettingsIcon")
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 88, height: 88)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
             Text("Clio")
                 .font(.title2.weight(.semibold))
