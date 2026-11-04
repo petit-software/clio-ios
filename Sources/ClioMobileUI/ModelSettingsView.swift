@@ -110,7 +110,7 @@ struct SummaryModelSection: View {
             if apple.isAvailable {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: ModelRow.slot, height: ModelRow.slot)
                     .accessibilityLabel(selected ? "Selected" : "Available")
             }
@@ -230,7 +230,7 @@ struct ModelRow: View {
         } else if installed != nil {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .accessibilityLabel(isActive ? "Selected" : "Installed")
         } else {
             Button(failure == nil ? "Download" : "Retry",
