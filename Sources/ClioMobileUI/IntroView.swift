@@ -23,12 +23,12 @@ struct IntroView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 28) {
-                    // The mark, in the text colour, where the icon was.
+                    // The mark, in a light grey, where the icon was.
                     Image("IntroMark")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(height: 44)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.tertiary)
                         .padding(.top, 88)
                         .padding(.bottom, 16)
                         .accessibilityLabel("Clio")
