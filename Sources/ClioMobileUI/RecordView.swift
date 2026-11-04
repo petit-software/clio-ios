@@ -17,16 +17,25 @@ struct RecordView: View {
     /// Recording has been asked for from this sheet: an idle state after
     /// it means the recording landed or was cancelled, and the sheet goes.
     @State private var started = false
+    @Environment(\.colorScheme) private var colorScheme
     private let startsAutomatically: Bool
     /// Called when the sheet should go: closed after a failure, or the
     /// recording stopped. The root opens a recording that lands.
     private let onClose: () -> Void
 
     /// The controls' height and fills: the capsules the sheet has had all
-    /// along, on fills that follow the appearance.
+    /// along, on fills that follow the appearance. The main action is the
+    /// home record button's colour: black in light mode, white in dark,
+    /// with the text the other way; not the system red, which read as a
+    /// warning on a button that saves.
     static let actionHeight: CGFloat = 52
-    static let inertFill = Color.secondary.opacity(0.18)
-    static let destructive = Color.red
+    private var primaryFill: Color { colorScheme == .dark ? .white : .black }
+    private var primaryText: Color { colorScheme == .dark ? .black : .white }
+    /// The other capsules: a solid grey, not a translucent one, so they
+    /// read the same whatever is behind the sheet.
+    private var inertFill: Color {
+        colorScheme == .dark ? Color(white: 0.22) : Color(white: 0.91)
+    }
 
     init(startsAutomatically: Bool = true, onClose: @escaping () -> Void = {}) {
         self.startsAutomatically = startsAutomatically
@@ -100,7 +109,7 @@ struct RecordView: View {
         return HStack(spacing: 8) {
             Image(systemName: "circle.fill")
                 .font(.system(size: 9))
-                .foregroundStyle(recording ? Self.destructive : Color.secondary)
+                .foregroundStyle(recording ? Color.red : Color.secondary)
                 .symbolEffect(.pulse, options: .repeating, isActive: recording && !reduceMotion)
             Text(word)
                 .font(.subheadline.weight(.semibold))
@@ -141,10 +150,10 @@ struct RecordView: View {
         switch capture.state {
         case .failed:
             HStack(spacing: 12) {
-                capsuleButton("Close", fill: Self.inertFill) {
+                capsuleButton("Close", fill: inertFill) {
                     Task { await close(cancelling: false) }
                 }
-                capsuleButton("Try Again", fill: Self.destructive, foreground: .white) {
+                capsuleButton("Try Again", fill: primaryFill, foreground: primaryText) {
                     capture.dismissFailure()
                     Task { await begin() }
                 }
@@ -164,13 +173,13 @@ struct RecordView: View {
                 } label: {
                     Label("Stop", systemImage: "stop.fill")
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(canStop ? primaryText : Color.secondary.opacity(0.5))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: Self.actionHeight)
                         .contentShape(Capsule(style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .background(canStop ? Self.destructive : Self.inertFill,
+                .background(canStop ? primaryFill : inertFill,
                             in: Capsule(style: .continuous))
                 .disabled(!canStop)
                 .accessibilityLabel("Stop recording")
@@ -208,7 +217,7 @@ struct RecordView: View {
                 .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
-        .background(Self.inertFill, in: Capsule(style: .continuous))
+        .background(inertFill, in: Capsule(style: .continuous))
         .disabled(disabled)
         .accessibilityLabel(label)
     }

@@ -70,7 +70,7 @@ struct SettingsView: View {
                         recordingSection(store)
                     }
                 } footer: {
-                    Text("The length cap, silence detection, haptics, and hold to record.")
+                    Text("The length cap, silence detection, haptics, and location.")
                 }
                 Section {
                     page("Intelligence", value: intelligenceSummary(store)) {
@@ -276,18 +276,8 @@ struct SettingsView: View {
             Toggle("Haptic feedback", isOn: Binding(
                 get: { store.settings.hapticFeedback },
                 set: { store.settings.hapticFeedback = $0 }))
-            Toggle("Hold to record", isOn: Binding(
-                get: { store.settings.holdToRecord },
-                set: { store.settings.holdToRecord = $0 }))
-            if store.settings.holdToRecord {
-                Toggle(isOn: Binding(
-                    get: { store.settings.liveTranscriptPreview },
-                    set: { store.settings.liveTranscriptPreview = $0 })) {
-                    Text("Live transcript preview")
-                    Text("A rough transcript under the clock while you hold. "
-                         + "The saved transcript is written when you let go.")
-                }
-            }
+            // Hold to record and its live preview stay in Settings and in
+            // the code, but are not offered here for now.
             Toggle(isOn: Binding(
                 get: { store.settings.includeLocation },
                 set: { on in
@@ -300,10 +290,7 @@ struct SettingsView: View {
         } footer: {
             Text("A recording with no speech in it is marked as nothing heard "
                  + "instead of transcribed. Higher sensitivity counts quieter sounds "
-                 + "as speech. "
-                 + "With Hold to record on, the button records while your finger "
-                 + "is on it and stops when you let go. The preview runs the model "
-                 + "every few seconds while you hold, which uses more battery.")
+                 + "as speech.")
         }
     }
 
