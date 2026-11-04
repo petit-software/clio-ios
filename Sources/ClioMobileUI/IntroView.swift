@@ -46,7 +46,7 @@ struct IntroView: View {
                                 .resizable()
                                 .frame(width: Self.glyphSize, height: Self.glyphSize)
                         }
-                        point("Everything stays private on your device",
+                        point("Private by design",
                               "Audio, transcripts, and summaries never leave it.") {
                             Image("IntroLock")
                                 .resizable()
