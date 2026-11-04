@@ -27,7 +27,10 @@ struct RecordControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind) {
             ControlWidgetButton(action: RecordControlIntent()) {
-                Label("Record", systemImage: "mic.fill")
+                // Clio's own mark, a custom symbol in this extension's
+                // catalog, so the control carries the app's icon rather
+                // than the system microphone.
+                Label("Record", image: "ClioMark")
             }
         }
         .displayName("Record with Clio")

@@ -70,7 +70,10 @@ words, enforced by `SummaryPrompt.cleanTitle` whatever the model does.
 - **`ClioMobileApp`** — `@main`, the app delegate for background downloads,
   and `ClioShortcuts`, the App Shortcuts provider, which has to be here.
 - **`ClioWidget`** (Xcode target) — the Live Activity and the
-  `RecordControl` control. Links `ClioMobileActivity` only.
+  `RecordControl` control. Links `ClioMobileActivity` only. Its asset
+  catalog holds `ClioMark`, the app's five-bar mark as a custom symbol in
+  the SF Symbols template, written by hand (one weight, three scales);
+  a control's image has to be a symbol, so a plain image set would not do.
 
 ## Commands
 
