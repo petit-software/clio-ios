@@ -103,19 +103,23 @@ public final class IntelligenceController {
         inProgress.insert(id)
         failures[id] = nil
 
+        // The preferences as they are now, whichever way this was asked for
+        // — after the transcript, Summarize Again, a retry. The transcript
+        // is read, never written: a summary is about it, not of it.
+        let request = SummaryRequest(transcript: recording.transcript,
+                                     language: recording.language,
+                                     preferences: settings.settings.summaryPreferences)
         do {
-            let result = try await engine.summarize(
-                recording.transcript,
-                language: recording.language,
-                instructions: SummaryPrompt.instructions(settings.settings.summaryInstructions))
+            let result = try await engine.summarize(request)
             // Re-read: the user may have renamed or deleted it meanwhile.
             guard !Task.isCancelled, var current = library[id] else { return }
-            current.generatedTitle = result.title.isEmpty ? nil : result.title
-            current.summary = result.summary.isEmpty ? nil : result.summary
+            if !result.title.isEmpty { current.generatedTitle = result.title }
+            if !result.summary.isEmpty { current.summary = result.summary }
             library.update(current)
         } catch is CancellationError {
             return
         } catch {
+            // The old summary and title stand: a failure writes nothing.
             failures[id] = error.localizedDescription
         }
     }

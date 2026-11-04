@@ -132,3 +132,19 @@ struct RecordingStoreTests {
         #expect(!empty.displayTitle.isEmpty)
     }
 }
+
+@Suite("Deleting, from anywhere")
+struct RecordingDeletionTests {
+    @Test("One title and one message, by count and by parts")
+    func wording() {
+        #expect(RecordingDeletion.title(count: 1) == "Delete this recording?")
+        #expect(RecordingDeletion.title(count: 3) == "Delete 3 recordings?")
+        let single = Recording(duration: 1)
+        #expect(RecordingDeletion.message(for: [single]).hasPrefix("The audio and its transcript"))
+        #expect(RecordingDeletion.message(for: [single]).hasSuffix("This cannot be undone."))
+        var merged = Recording(duration: 1)
+        merged.parts.append(RecordingPart(duration: 1))
+        #expect(RecordingDeletion.message(for: [merged]).hasPrefix("All 2 parts"))
+        #expect(RecordingDeletion.message(for: [single, merged]).hasPrefix("Their audio"))
+    }
+}

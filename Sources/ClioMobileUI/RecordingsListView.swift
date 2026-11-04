@@ -70,7 +70,9 @@ struct RecordingsListView: View {
     /// `EditMode`, which does not exist on macOS.
     @State private var selection: Set<Recording.ID> = []
     @State private var selecting = false
-    @State private var confirmingDelete = false
+    /// The rows about to be deleted — from the bar or a swipe — while the
+    /// confirmation is up.
+    @State private var deleting: DeletionRequest?
     var style: HomeStyle = .default
     @Binding var chrome: HomeChrome
     var onRecord: () -> Void
@@ -106,13 +108,12 @@ struct RecordingsListView: View {
             }
             .deleteBar(showing: selecting && !selection.isEmpty,
                        merge: selection.count > 1 ? { mergeSelected() } : nil) {
-                confirmingDelete = true
+                deleting = DeletionRequest(ids: Array(selection))
             }
-            .alert(deletePrompt, isPresented: $confirmingDelete) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) { deleteSelected() }
-            } message: {
-                Text("The audio goes with the transcript, and there is no undo.")
+            // The same confirmation a recording's own page shows, and the
+            // same deletion behind it. A swipe asks too: there is no undo.
+            .confirmDeletion($deleting, library: model.library) {
+                if selecting { endSelecting() }
             }
             // Reported up so RootView can take the record button away, and
             // put it back the moment the mode ends.
@@ -293,9 +294,7 @@ struct RecordingsListView: View {
                     // time is not what the mode is for, and the red minus
                     // would fight the tick for the left of the row.
                     .onDelete(perform: selecting ? nil : { offsets in
-                        for index in offsets {
-                            model.library.delete(section.recordings[index])
-                        }
+                        deleting = DeletionRequest(ids: offsets.map { section.recordings[$0].id })
                     })
                 }
             }
@@ -331,17 +330,6 @@ struct RecordingsListView: View {
         endSelecting()
         model.intelligence.resummarize(merged)
         onOpen(merged)
-    }
-
-    private func deleteSelected() {
-        for id in selection { model.library.delete(id) }
-        endSelecting()
-    }
-
-    private var deletePrompt: String {
-        selection.count == 1
-            ? "Delete this recording?"
-            : "Delete these \(selection.count) recordings?"
     }
 
 
@@ -578,6 +566,7 @@ struct FloatingRecordPane: View {
     var searching = false
     @Environment(AppModel.self) private var model
     @Environment(\.safeAreaInsets) private var safeArea
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The meter as drawn: a spring per bar, stepped once a frame.
     @State private var meter = WashMeter()
     /// The frame clock runs while a held recording does, and a moment
@@ -616,13 +605,15 @@ struct FloatingRecordPane: View {
                      + Self.buttonBottomPadding + bottomInset
                      + (held ? Self.washWhileHeld : 0)
             let height = base + Self.washSwell
-            TimelineView(.animation(paused: !animating)) { context in
-                let bars = animating
+            // With motion reduced the edge stays flat: the lift on hold
+            // still says a recording is running, the voice does not move it.
+            TimelineView(.animation(paused: !animating || reduceMotion)) { context in
+                let bars = animating && !reduceMotion
                     ? meter.step(toward: held ? capture.bands : [], at: context.date)
                     : BarVector([Float](repeating: 0, count: MeterAnalyzer.barCount))
                 wash(bars: bars, base: base, height: height, held: held)
             }
-            .animation(.smooth(duration: 0.3), value: held)
+            .animation(reduceMotion ? .linear(duration: 0.2) : .smooth(duration: 0.3), value: held)
             .onChange(of: held, initial: true) { _, now in
                 if now {
                     animating = true
@@ -878,6 +869,7 @@ struct FloatingRecordButton: View {
     var onRecord: () -> Void
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pressing = false
 
     var body: some View {
@@ -904,14 +896,18 @@ struct FloatingRecordButton: View {
     }
 
     private func label(_ capture: CaptureController) -> some View {
-        VStack(spacing: 1) {
+        // A red dot beside the word while it records, so the state reads
+        // at a glance in light mode too, where the glass is white on lime
+        // and the word alone is quiet.
+        HStack(spacing: 8) {
+            if capture.state.isCapturing {
+                RecordingDot(pulsing: !reduceMotion && capture.state == .recording)
+                    .font(.caption)
+            }
             Text(title(capture))
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
-            if let subtitle = subtitle(capture) {
-                Text(subtitle).font(.caption2).opacity(0.85)
-            }
         }
         // Plain: black on white glass in light mode, white on black in dark.
         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
@@ -962,9 +958,6 @@ struct FloatingRecordButton: View {
         }
     }
 
-    private func subtitle(_ capture: CaptureController) -> String? {
-        nil
-    }
 }
 
 /// The pane under the list. Gone while a search is in progress — the
@@ -1030,10 +1023,15 @@ struct HoldRecordButton: View {
     var body: some View {
         let capture = model.capture
         VStack(spacing: 2) {
-            Text(title(capture))
-                .font(.title2.weight(.semibold))
-                .monospacedDigit()
-                .contentTransition(.numericText())
+            HStack(spacing: 8) {
+                if capture.state.isCapturing {
+                    RecordingDot(pulsing: capture.state == .recording).font(.footnote)
+                }
+                Text(title(capture))
+                    .font(.title2.weight(.semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+            }
             if let subtitle = subtitle(capture) {
                 Text(subtitle)
                     .font(.footnote)

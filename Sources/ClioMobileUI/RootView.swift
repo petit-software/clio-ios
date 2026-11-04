@@ -23,8 +23,8 @@ public struct RootView: View {
     @State private var settingsSheet: SettingsSheet?
     @State private var showingRecorder = false
     @State private var showingIntro = false
-    @State private var recorderDetent: PresentationDetent = .medium
     @State private var activity = RecordingActivityController()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// What the library screen reports back: whether it is the one on show,
     /// and whether the search field has it.
     @State private var chrome = HomeChrome()
@@ -53,18 +53,16 @@ public struct RootView: View {
                 // together. Which is why the wash, the button and the clock
                 // are here rather than in the list — they have to stay put
                 // while everything behind them recedes.
-                .receded(held)
+                .receded(held, reduceMotion: reduceMotion)
                 .overlay {
                     if held {
-                        Text(Format.duration(model.capture.elapsed))
-                            .font(.system(size: 76, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .contentTransition(.numericText())
-                            .transition(.opacity.combined(with: .scale(scale: 1.08)))
-                            .accessibilityLabel("Recording, \(Format.duration(model.capture.elapsed))")
+                        HeldRecordingOverlay()
+                            .transition(reduceMotion
+                                        ? .opacity
+                                        : .opacity.combined(with: .scale(scale: 1.08)))
                     }
                 }
-                .animation(.smooth(duration: 0.35), value: held)
+                .animation(reduceMotion ? .linear(duration: 0.2) : .smooth(duration: 0.35), value: held)
                 .overlay(alignment: .bottom) {
                     if homeStyle == .floating && recordsHere {
                         FloatingRecordPane(onRecord: { showingRecorder = true },
@@ -144,16 +142,11 @@ public struct RootView: View {
         .onAppear {
             if !model.settings.settings.introShown { showingIntro = true }
         }
-        .sheet(isPresented: $showingRecorder, onDismiss: { recorderDetent = .medium }) {
-            NavigationStack {
-                RecordView(presentationDetent: $recorderDetent) {
-                    showingRecorder = false
-                }
-            }
-            .presentationDetents([.medium, .large], selection: $recorderDetent)
-            .presentationBackground(RecordSurface.background)
-            .presentationDragIndicator(.visible)
-            .interactiveDismissDisabled()
+        // The record sheet presents itself: detents, drag indicator, and
+        // no swipe to dismiss while it is capturing. Dismissed any other
+        // way, a failure it was showing is cleared.
+        .sheet(isPresented: $showingRecorder, onDismiss: { model.capture.dismissFailure() }) {
+            RecordView { showingRecorder = false }
         }
         .onChange(of: model.capture.lastRecordingID) { _, id in
             // A recording landed — from the sheet or from holding the
@@ -192,9 +185,14 @@ public struct RootView: View {
                     showingIntro = true
                 }
             case .record:
+                // A recording already running stays as it is: the ask was
+                // to record, and it is. The sheet comes up over it if it
+                // is not already.
                 settingsSheet = nil
-                path = []
-                showingRecorder = true
+                if !model.capture.state.isBusy { path = [] }
+                if !model.settings.settings.holdToRecord || !model.capture.state.isBusy {
+                    showingRecorder = true
+                }
             }
         }
     }
@@ -203,11 +201,75 @@ public struct RootView: View {
 private extension View {
     /// Back and away: smaller, blurred and gone, one animation over one
     /// layer, rather than a bar leaving on its own while the list shrinks.
-    func receded(_ receded: Bool) -> some View {
-        scaleEffect(receded ? 0.9 : 1)
-            .blur(radius: receded ? 16 : 0)
+    /// With motion reduced it only fades.
+    func receded(_ receded: Bool, reduceMotion: Bool) -> some View {
+        scaleEffect(receded && !reduceMotion ? 0.9 : 1)
+            .blur(radius: receded && !reduceMotion ? 16 : 0)
             .opacity(receded ? 0 : 1)
             .allowsHitTesting(!receded)
+    }
+}
+
+/// What takes the middle of the screen while a held recording runs: that
+/// it is recording, for how long, and — with the preview on — a rough
+/// transcript of the last half minute. The list behind has gone back, so
+/// this reads on the plain background in either appearance.
+private struct HeldRecordingOverlay: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let capture = model.capture
+        let seconds = Int(capture.elapsed)
+        VStack(spacing: 14) {
+            Label {
+                Text(capture.state == .recording ? "Recording" : "Paused")
+            } icon: {
+                if capture.state == .recording {
+                    RecordingDot(pulsing: !reduceMotion)
+                } else {
+                    Image(systemName: "pause.fill").foregroundStyle(.secondary)
+                }
+            }
+            .font(.headline)
+            Text(Format.duration(capture.elapsed))
+                .font(.system(size: 76, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .contentTransition(reduceMotion ? .identity : .numericText(value: Double(seconds)))
+                .animation(reduceMotion ? nil : .default, value: seconds)
+            if model.settings.settings.liveTranscriptPreview {
+                preview(capture.livePreview)
+            }
+        }
+        .padding(.horizontal, 32)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Recording, \(Format.duration(capture.elapsed))")
+    }
+
+    /// Provisional, and said so: the words so far in the secondary colour
+    /// under a "Preview" caption, newest words kept on screen. The saved
+    /// transcript is written at stop from the whole recording.
+    @ViewBuilder
+    private func preview(_ text: String?) -> some View {
+        VStack(spacing: 6) {
+            Text("Preview")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+            Text(text ?? "Listening…")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(5)
+                .truncationMode(.head)
+                .frame(maxWidth: 420)
+                .animation(reduceMotion ? nil : .default, value: text)
+        }
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text.map { "Preview transcript, not final: \($0)" } ?? "Preview transcript, listening")
     }
 }
 

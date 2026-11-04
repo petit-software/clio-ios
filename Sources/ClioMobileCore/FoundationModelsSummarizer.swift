@@ -11,13 +11,15 @@ import FoundationModels
 @available(iOS 26, macOS 26, *)
 public actor FoundationModelsSummarizer: SummaryEngine {
 
-    @Generable(description: "A title and a summary for one voice recording.")
+    /// The two fields, and nothing about their shape: the shape is the
+    /// instructions' business, so that the user's preferences — bullets,
+    /// detailed, a meeting — are not quietly overruled by a guide that
+    /// says "one to three sentences". They were, once.
+    @Generable(description: "A title and notes for one voice recording, written as instructed.")
     struct Draft {
-        @Guide(description: "Four or five words at most, in the language of the transcript. "
-                          + "No quotation marks, no full stop.")
+        @Guide(description: "The title, as the instructions describe it.")
         var title: String
-        @Guide(description: "One to three plain sentences saying what was said, "
-                          + "in the language of the transcript. No preamble.")
+        @Guide(description: "The notes, in the form and at the length the instructions ask for.")
         var summary: String
     }
 
@@ -45,23 +47,26 @@ public actor FoundationModelsSummarizer: SummaryEngine {
         }
     }
 
-    public func summarize(_ transcript: String, language: String?,
-                          instructions: String) async throws -> TranscriptSummary {
+    public func summarize(_ request: SummaryRequest) async throws -> TranscriptSummary {
         let model = SystemLanguageModel.default
         if case .unavailable(let reason) = model.availability {
             throw SummaryEngineError.unavailable(Self.describe(reason))
         }
         // Whisper knows the language; the model may not. Asking first gives
         // a sentence the user can act on instead of a generic failure.
-        if let language, !model.supportsLocale(Locale(identifier: language)) {
+        if let language = request.language, !model.supportsLocale(Locale(identifier: language)) {
             throw SummaryEngineError.unsupportedLanguage(TranscriptionLanguage.name(for: language))
         }
 
-        let session = LanguageModelSession(model: model, instructions: instructions)
+        // The shared prompt; the fields come back as fields, so no answer
+        // form is asked for.
+        let session = LanguageModelSession(
+            model: model,
+            instructions: SummaryPrompt.instructions(for: request.preferences, answerForm: false))
         let draft: Draft
         do {
             let response = try await session.respond(
-                to: SummaryPrompt.prompt(for: transcript),
+                to: SummaryPrompt.prompt(for: request.transcript),
                 generating: Draft.self,
                 options: GenerationOptions(temperature: 0.3))
             draft = response.content

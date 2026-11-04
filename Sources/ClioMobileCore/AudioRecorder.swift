@@ -57,6 +57,9 @@ public protocol AudioCapturing: AnyObject, Sendable {
     var elapsed: TimeInterval { get }
     /// True once the cap has been hit; the controller then stops.
     var reachedLimit: Bool { get }
+    /// The last `seconds` of what has been captured so far, as a copy, for
+    /// a transcript preview while the recording runs. Capture goes on.
+    func snapshot(lastSeconds seconds: TimeInterval) -> [Float]
 }
 
 /// Mic capture at 16 kHz mono Float32.
@@ -253,6 +256,16 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
     public var reachedLimit: Bool {
         lock.lock(); defer { lock.unlock() }
         return didReachLimit
+    }
+
+    /// A copy of the tail of the buffer, taken under the lock. The tap
+    /// appends a thousand samples at a time, so holding it for a copy of
+    /// half a minute — two megabytes — is nothing it notices.
+    public func snapshot(lastSeconds seconds: TimeInterval) -> [Float] {
+        lock.lock(); defer { lock.unlock() }
+        let count = min(writeIndex, Int(max(0, seconds) * Self.sampleRate))
+        guard count > 0 else { return [] }
+        return Array(buffer[(writeIndex - count)..<writeIndex])
     }
 
     // MARK: Engine
@@ -715,6 +728,23 @@ public final class SimulatedRecorder: AudioCapturing, @unchecked Sendable {
     public var reachedLimit: Bool {
         lock.lock(); defer { lock.unlock() }
         return startedAt != nil && elapsedLocked >= maxSeconds
+    }
+
+    /// The tail of what `stop()` would return now: the fixture's, or the
+    /// tone's for the seconds elapsed so far.
+    public func snapshot(lastSeconds seconds: TimeInterval) -> [Float] {
+        let elapsed = lock.withLock { startedAt == nil ? 0 : min(elapsedLocked, maxSeconds) }
+        let all: [Float]
+        if let samples {
+            all = samples
+        } else {
+            let count = Int(elapsed * Double(samplesPerSecond))
+            all = (0..<count).map { i in
+                0.1 * sin(2 * .pi * 440 * Float(i) / Float(AudioRecorder.sampleRate))
+            }
+        }
+        let count = min(all.count, Int(max(0, seconds) * AudioRecorder.sampleRate))
+        return Array(all.suffix(count))
     }
 
     private var elapsedLocked: TimeInterval {

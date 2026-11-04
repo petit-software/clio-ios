@@ -26,6 +26,11 @@ public struct Settings: Codable, Equatable, Sendable {
     public var holdToRecord: Bool = false
     /// Where each recording was made is saved with it.
     public var includeLocation: Bool = false
+    /// While a held recording runs, a rough transcript of the last half
+    /// minute is shown under the clock, written again every couple of
+    /// seconds. Provisional: the saved transcript is made from the whole
+    /// recording when it stops, whatever this says.
+    public var liveTranscriptPreview: Bool = false
 
     // Transcription
     /// `nil` means auto-detect.
@@ -44,15 +49,15 @@ public struct Settings: Codable, Equatable, Sendable {
     public var trimTrailingPunctuation: Bool = false
     public var capitalizeFirstLetter: Bool = true
 
-    // Intelligence (milestone 3)
+    // Intelligence
     /// Titles and summaries from the on-device language model, when the
-    /// phone has one. Off does nothing; on does nothing until M3.
+    /// phone has one. Off does nothing.
     public var generateSummaries: Bool = true
-    /// What the language model is told before it is shown a transcript.
-    /// Empty means the built-in instructions — see `SummaryPrompt` — kept
-    /// empty rather than filled with a copy of them, so a better default
-    /// reaches anyone who has not written their own.
-    public var summaryInstructions: String = ""
+    /// How summaries read: the kind of note, its shape, its length, and
+    /// anything the user has added to the built-in rules. One struct, so
+    /// every summary path — the first one, Summarize Again, a retry — is
+    /// handed the same thing. See `SummaryPrompt`.
+    public var summaryPreferences = SummaryPreferences()
 
     public init() {}
 
@@ -87,6 +92,7 @@ public struct Settings: Codable, Equatable, Sendable {
         hapticFeedback = read(.hapticFeedback, defaults.hapticFeedback)
         holdToRecord = read(.holdToRecord, defaults.holdToRecord)
         includeLocation = read(.includeLocation, defaults.includeLocation)
+        liveTranscriptPreview = read(.liveTranscriptPreview, defaults.liveTranscriptPreview)
 
         language = readOptional(.language, String.self)
         translateToEnglish = read(.translateToEnglish, defaults.translateToEnglish)
@@ -102,7 +108,21 @@ public struct Settings: Codable, Equatable, Sendable {
                                      defaults.capitalizeFirstLetter)
 
         generateSummaries = read(.generateSummaries, defaults.generateSummaries)
-        summaryInstructions = read(.summaryInstructions, defaults.summaryInstructions)
+        summaryPreferences = read(.summaryPreferences, defaults.summaryPreferences)
+        // Before the preferences, the one field was a whole prompt of the
+        // user's own that replaced the built-in one. What they wrote is kept
+        // as additions to the rules, which is the nearest thing it can be.
+        if summaryPreferences.trimmedInstructions == nil,
+           let legacy = try? decoder.container(keyedBy: LegacyKeys.self)
+               .decodeIfPresent(String.self, forKey: .summaryInstructions),
+           !legacy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            summaryPreferences.instructions = legacy
+        }
+    }
+
+    /// Keys from earlier versions, read on the way in and never written.
+    private enum LegacyKeys: String, CodingKey {
+        case summaryInstructions
     }
 }
 

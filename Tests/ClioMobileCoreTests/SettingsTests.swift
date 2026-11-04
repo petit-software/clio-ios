@@ -14,6 +14,47 @@ struct SettingsAdditionsTests {
         #expect(old.holdToRecord == false)
     }
 
+    @Test("Live transcript preview defaults off and survives a round trip")
+    func liveTranscriptPreview() throws {
+        #expect(Settings().liveTranscriptPreview == false)
+        var settings = Settings()
+        settings.liveTranscriptPreview = true
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).liveTranscriptPreview)
+        let old = try JSONDecoder().decode(Settings.self, from: Data("{}".utf8))
+        #expect(old.liveTranscriptPreview == false)
+    }
+
+    @Test("Summary preferences default, round-trip, and tolerate an unknown value")
+    func summaryPreferences() throws {
+        #expect(Settings().summaryPreferences == SummaryPreferences())
+        var settings = Settings()
+        settings.summaryPreferences = SummaryPreferences(noteType: .todo, format: .numbered,
+                                                         length: .detailed, instructions: "Short.")
+        let data = try JSONEncoder().encode(settings)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).summaryPreferences
+                == settings.summaryPreferences)
+        let odd = try JSONDecoder().decode(
+            Settings.self,
+            from: Data(#"{"summaryPreferences":{"noteType":"sonnet","format":"bullets"}}"#.utf8))
+        #expect(odd.summaryPreferences.noteType == .general, "an unknown type is the default")
+        #expect(odd.summaryPreferences.format == .bullets, "and the rest is kept")
+        #expect(SummaryPreferences(instructions: " \n ").trimmedInstructions == nil)
+    }
+
+    @Test("A prompt written before the preferences becomes the user's additions")
+    func legacyInstructionsMigrate() throws {
+        let old = try JSONDecoder().decode(
+            Settings.self, from: Data(#"{"summaryInstructions":"Answer in Dutch."}"#.utf8))
+        #expect(old.summaryPreferences.instructions == "Answer in Dutch.")
+        // Written back under the new key only.
+        let data = try JSONEncoder().encode(old)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["summaryInstructions"] == nil)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).summaryPreferences.instructions
+                == "Answer in Dutch.")
+    }
+
     @Test("Include location defaults off and survives a round trip")
     func includeLocation() throws {
         #expect(Settings().includeLocation == false)

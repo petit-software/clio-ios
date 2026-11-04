@@ -99,6 +99,18 @@ public final class CaptureController {
     /// what lets the list and the detail say "Transcribing…" on it rather
     /// than "Not transcribed yet".
     public private(set) var transcribingParts: Set<RecordingPart.ID> = []
+    /// A rough transcript of the last half minute of a held recording,
+    /// written again every couple of seconds while it runs — see
+    /// `Settings.liveTranscriptPreview`. Nil when there is none: the
+    /// setting is off, nothing has been said yet, or the recording is over.
+    /// Provisional by nature; the saved transcript is made at stop from
+    /// the whole recording and never from this.
+    public private(set) var livePreview: String?
+    /// How often the preview is written. Short in tests.
+    public var previewInterval: Duration = .seconds(2)
+    /// The preview looks this far back. Whisper's window, so one pass.
+    public static let previewWindowSeconds: TimeInterval = 30
+    private var previewTask: Task<Void, Never>?
 
     public init(recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
@@ -215,6 +227,7 @@ public final class CaptureController {
         // A cancel can land while the hardware was starting.
         guard state == .starting else { return }
         state = .recording
+        livePreview = nil
         // The fix is fetched while the user talks, so it is there by the
         // time the recording is; a slow one is waited for at the end.
         if settings.settings.includeLocation {
@@ -229,6 +242,58 @@ public final class CaptureController {
         if let model = activeModel {
             Task { [engine] in try? await engine.load(model: model) }
         }
+        // Hold to record only: the preview is read under the clock while
+        // the finger is down, and the sheet has nowhere to show it.
+        if discardingSilence { startPreview() }
+    }
+
+    // MARK: Live preview
+
+    /// Every `previewInterval`, the last half minute through the model, and
+    /// the words into `livePreview`. Reads the setting on each pass, so
+    /// turning it off mid-recording stops the next pass and nothing else;
+    /// the capture never waits on this. A pass that fails is skipped — the
+    /// transcript that counts is the one written at stop.
+    private func startPreview() {
+        previewTask?.cancel()
+        previewTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: self?.previewInterval ?? .seconds(2))
+                guard let self, !Task.isCancelled, self.state == .recording else { continue }
+                guard self.settings.settings.liveTranscriptPreview, let model = self.activeModel else {
+                    self.livePreview = nil
+                    continue
+                }
+                let current = self.settings.settings
+                let samples = self.recorder.snapshot(lastSeconds: Self.previewWindowSeconds)
+                guard SilenceGate.verdict(for: samples, sensitivity: current.vadSensitivity,
+                                          usingVoiceActivity: true).isSpeech else { continue }
+                let options = TranscribeOptions(
+                    language: current.language,
+                    translateToEnglish: current.translateToEnglish,
+                    initialPrompt: TranscriptFormatter.initialPrompt(from: current.customVocabulary))
+                let engine = self.engine
+                guard let transcript = try? await Self.preview(samples, with: engine,
+                                                               model: model, options: options),
+                      !Task.isCancelled, self.state == .recording
+                else { continue }
+                let text = TranscriptFormatter.format(transcript.text, settings: current)
+                if !text.isEmpty { self.livePreview = text }
+            }
+        }
+    }
+
+    private nonisolated static func preview(_ samples: [Float], with engine: any TranscriptionEngine,
+                                            model: InstalledModel,
+                                            options: TranscribeOptions) async throws -> Transcript {
+        try await engine.load(model: model)
+        return try await engine.transcribe(samples: samples, options: options)
+    }
+
+    private func stopPreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        livePreview = nil
     }
 
     /// Hold the recording where it is. The elapsed time stops with it.
@@ -254,6 +319,7 @@ public final class CaptureController {
         stopping = true
         defer { stopping = false }
         stopPolling()
+        stopPreview()
         // Not `.transcribing` yet: `finish` looks at what was captured
         // first, and a capture with nothing in it never gets that far. The
         // flag is what keeps a second stop out in the meantime, since the
@@ -267,6 +333,7 @@ public final class CaptureController {
         switch state {
         case .starting, .recording, .interrupted, .paused:
             stopPolling()
+            stopPreview()
             locationTask?.cancel()
             locationTask = nil
             await recorder.cancel()

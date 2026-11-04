@@ -258,6 +258,15 @@ struct SettingsView: View {
             Toggle("Hold to record", isOn: Binding(
                 get: { store.settings.holdToRecord },
                 set: { store.settings.holdToRecord = $0 }))
+            if store.settings.holdToRecord {
+                Toggle(isOn: Binding(
+                    get: { store.settings.liveTranscriptPreview },
+                    set: { store.settings.liveTranscriptPreview = $0 })) {
+                    Text("Live transcript preview")
+                    Text("A rough transcript under the clock while you hold. "
+                         + "The saved transcript is written when you let go.")
+                }
+            }
             Toggle(isOn: Binding(
                 get: { store.settings.includeLocation },
                 set: { on in
@@ -271,26 +280,18 @@ struct SettingsView: View {
             Text("Silence at the start and end of a recording is cut before "
                  + "transcription. Higher sensitivity keeps quieter speech. "
                  + "With Hold to record on, the button records while your finger "
-                 + "is on it and stops when you let go.")
+                 + "is on it and stops when you let go. The preview runs the model "
+                 + "every few seconds while you hold, which uses more battery.")
         }
     }
 
+    @ViewBuilder
     private func intelligenceSection(_ store: SettingsStore) -> some View {
         let availability = model.intelligence.availability
-        return Section {
+        Section {
             Toggle("Titles and summaries", isOn: Binding(
                 get: { store.settings.generateSummaries },
                 set: { store.settings.generateSummaries = $0 }))
-            if availability.isAvailable {
-                NavigationLink {
-                    SummaryInstructionsEditor()
-                } label: {
-                    LabeledContent("Instructions",
-                                   value: store.settings.summaryInstructions
-                                       .trimmingCharacters(in: .whitespacesAndNewlines)
-                                       .isEmpty ? "Default" : "Custom")
-                }
-            }
             if let reason = availability.reason {
                 Label(reason, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
@@ -298,12 +299,42 @@ struct SettingsView: View {
             }
         } footer: {
             Text(availability.isAvailable
-                 ? "After each transcription the language model built into iOS "
-                   + "writes a title and a short summary. The transcript never "
-                   + "leaves the phone."
+                 ? "After each transcription the on-device language model writes a "
+                   + "title and a summary. The transcript never leaves the phone."
                  : "Needs iOS 26 and Apple Intelligence. When it is on, the language "
-                   + "model built into iOS writes a title and a short summary for "
-                   + "each recording, on the phone.")
+                   + "model built into iOS writes a title and a summary for each "
+                   + "recording, on the phone.")
+        }
+        // How the summary reads. Read by every path that writes one — the
+        // first summary and Summarize Again alike — at the moment it runs.
+        Section {
+            Picker("Note type", selection: Binding(
+                get: { store.settings.summaryPreferences.noteType },
+                set: { store.settings.summaryPreferences.noteType = $0 })) {
+                ForEach(NoteType.allCases, id: \.self) { Text($0.name).tag($0) }
+            }
+            Picker("Format", selection: Binding(
+                get: { store.settings.summaryPreferences.format },
+                set: { store.settings.summaryPreferences.format = $0 })) {
+                ForEach(SummaryFormat.allCases, id: \.self) { Text($0.name).tag($0) }
+            }
+            Picker("Length", selection: Binding(
+                get: { store.settings.summaryPreferences.length },
+                set: { store.settings.summaryPreferences.length = $0 })) {
+                ForEach(SummaryLength.allCases, id: \.self) { Text($0.name).tag($0) }
+            }
+            NavigationLink {
+                SummaryInstructionsEditor()
+            } label: {
+                LabeledContent("Instructions",
+                               value: store.settings.summaryPreferences.trimmedInstructions == nil
+                                   ? "None" : "Added")
+            }
+        } header: {
+            Text("Summaries")
+        } footer: {
+            Text("Applies to the next summary, and to Summarize Again on an existing "
+                 + "recording. The transcript is not changed.")
         }
     }
 
@@ -532,14 +563,14 @@ struct VocabularyEditor: View {
 
 // MARK: - Summary instructions
 
-/// The system prompt the on-device model is given before it is shown a
-/// transcript.
+/// What the user adds to the built-in rules before the model is shown a
+/// transcript: "name who spoke", "answer in Dutch", "skip the small talk".
 ///
-/// Editable because what a good summary is depends on what the recordings
-/// are: a standup note and a interview want different answers. Stored empty
-/// while it matches the built-in text, so improving that default reaches
-/// anyone who has not written their own — which is why Reset clears the
-/// field rather than pasting the default into it.
+/// Additions, not a replacement. The rules that keep a summary faithful
+/// to the transcript — nothing invented, lists kept, decisions told from
+/// questions — always apply; this refines what comes out within them. The
+/// rules themselves are shown below the field, read-only, so it is clear
+/// what is being added to.
 struct SummaryInstructionsEditor: View {
     @Environment(AppModel.self) private var model
     @State private var text = ""
@@ -549,50 +580,39 @@ struct SummaryInstructionsEditor: View {
         Form {
             Section {
                 TextEditor(text: $text)
-                    .font(.body.monospaced())
-                    // Tall enough that the built-in instructions are on
-                    // screen whole: a prompt read half at a time is a
-                    // prompt nobody edits.
-                    .frame(minHeight: 340)
-                    .autocorrectionDisabled()
+                    .frame(minHeight: 140)
+            } header: {
+                Text("Your instructions")
             } footer: {
-                Text("What the model is told before it is shown a transcript. "
-                     + "It answers with a title and a summary either way; this "
-                     + "is what shapes them.")
+                Text("Added to the built-in rules for every summary. Leave it empty "
+                     + "to use the rules alone.")
             }
             Section {
-                Button("Reset to Default") {
-                    text = SummaryPrompt.defaultInstructions
-                    model.settings.settings.summaryInstructions = ""
-                }
-                .disabled(isDefault)
+                Button("Clear") { text = "" }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            Section {
+                Text(SummaryPrompt.rules)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            } header: {
+                Text("Built-in rules")
             } footer: {
-                Text(isDefault
-                     ? "These are the built-in instructions. Edit them and yours "
-                       + "are used instead."
-                     : "Yours are used. Reset puts the built-in instructions back.")
+                Text("The note type, format and length in Settings add a line each. "
+                     + "These rules always apply.")
             }
         }
         .navigationTitle("Instructions")
         .onAppear {
-            text = SummaryPrompt.instructions(model.settings.settings.summaryInstructions)
+            text = model.settings.settings.summaryPreferences.instructions
             loaded = true
         }
         .onChange(of: text) { _, newValue in
-            // Not while the field is being filled in on appear: that would
-            // write the default back as if the user had typed it.
+            // Not while the field is being filled in on appear.
             guard loaded else { return }
-            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            model.settings.settings.summaryInstructions =
-                trimmed == SummaryPrompt.defaultInstructions ? "" : newValue
+            model.settings.settings.summaryPreferences.instructions = newValue
         }
-    }
-
-    /// Nothing of the user's own stored: the field still shows the built-in
-    /// text, which is what they would be editing.
-    private var isDefault: Bool {
-        model.settings.settings.summaryInstructions
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

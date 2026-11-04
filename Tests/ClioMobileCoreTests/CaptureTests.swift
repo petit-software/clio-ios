@@ -437,6 +437,42 @@ struct CaptureTests {
         #expect(library.recordings.count == 1)
     }
 
+    @Test("Hold to record with the preview on: a rough transcript while it runs, the real one at stop")
+    @MainActor
+    func livePreview() async throws {
+        var settings = Settings()
+        settings.liveTranscriptPreview = true
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 3
+        let (controller, library, directory) = try makeController(recorder: recorder, settings: settings)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        controller.previewInterval = .milliseconds(30)
+
+        await controller.start(discardingSilence: true)
+        try await settle(until: { controller.livePreview != nil })
+        let preview = try #require(controller.livePreview)
+        #expect(preview.contains("[Clio stub]"), "the preview is the engine's words")
+        #expect(library.recordings.isEmpty, "nothing is saved by the preview")
+
+        await controller.stop()
+        #expect(controller.livePreview == nil, "gone with the recording")
+        let recording = try #require(library.recordings.first)
+        #expect(recording.transcript.contains("48000 samples"), "the saved transcript is from the whole capture")
+
+        // The sheet's recording has no preview, whatever the setting says.
+        await controller.start()
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(controller.livePreview == nil)
+        await controller.cancel()
+
+        // Off, a held recording has none either.
+        controller.settings.settings.liveTranscriptPreview = false
+        await controller.start(discardingSilence: true)
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(controller.livePreview == nil)
+        await controller.cancel()
+    }
+
     @Test("Keep in memory off unloads the model after each transcription")
     @MainActor
     func unloadsWhenNotKept() async throws {

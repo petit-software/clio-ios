@@ -48,7 +48,7 @@ public final class AppModel {
                         models: ModelManager(),
                         recorder: AudioRecorder(),
                         engine: WhisperKitEngine(),
-                        summarizer: SummaryEngines.live(),
+                        summarizer: SummaryEngines.apple(),
                         locations: CoreLocationProvider())
     }
 

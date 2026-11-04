@@ -43,20 +43,29 @@ public final class MeterAnalyzer: @unchecked Sendable {
 
     // MARK: Tuning
 
-    public static let rangeDB: Float = 38
-    public static let headroomDB: Float = 7
+    // Tuned on the phone's meter rather than the Mac's pill: a voice at
+    // arm's length sat at the top of the bars and twitched there, because
+    // the reference floor was where speech is loud, the top was close over
+    // it, and the attack landed a syllable in a single buffer. The floor
+    // now sits a little above speech, the headroom is wider, and both time
+    // constants are longer — a bar takes two or three buffers to rise and
+    // comes down over a sixth of a second — so a loud word fills the bar
+    // without pinning it, a quiet one still moves it, and room noise does
+    // not fidget.
+    public static let rangeDB: Float = 40
+    public static let headroomDB: Float = 10
     /// How many buffers behind the middle each bar draws.
     static let delayBuffers: [Int] = [4, 2, 0, 0, 2, 4]
-    public static let minimumReferenceDB: Float = -28
+    public static let minimumReferenceDB: Float = -20
     public static let referenceDecayDBPerSecond: Float = 6
     /// Speech gets quieter with frequency, about 6 dB an octave above the
     /// first formant. Added per band so the upper bars are not always small.
     static let tiltDB: [Float] = [0, 0, 3, 7, 11, 15]
-    public static let attack: Float = 0.015
-    public static let release: Float = 0.09
-    public static let gateDB: Float = -58
+    public static let attack: Float = 0.045
+    public static let release: Float = 0.16
+    public static let gateDB: Float = -55
     public static let blend: Float = 0.25
-    public static let gamma: Float = 0.85
+    public static let gamma: Float = 1.0
 
     // MARK: State
 

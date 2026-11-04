@@ -191,7 +191,7 @@ struct IntegrationTests {
     /// test suite over a system setting.
     @Test("Apple's on-device model writes a title and a summary")
     func foundationModels() async throws {
-        let engine = SummaryEngines.live()
+        let engine = SummaryEngines.apple()
         let availability = await engine.availability
         guard availability.isAvailable else {
             print("[integration] Foundation Models unavailable: \(availability.reason ?? "?")")
@@ -213,6 +213,17 @@ struct IntegrationTests {
         #expect(!summary.summary.isEmpty)
         #expect(summary.summary.lowercased().contains("plumber")
                 || summary.summary.lowercased().contains("boiler"))
+
+        // The same transcript as a to-do list in bullets: the preferences
+        // reach the model through the shared prompt, and the answer has
+        // the asked-for shape.
+        let todo = try await engine.summarize(SummaryRequest(
+            transcript: transcript, language: "en",
+            preferences: SummaryPreferences(noteType: .todo, format: .bullets, length: .standard)))
+        print("[integration] todo title: \(todo.title)")
+        print("[integration] todo summary:\n\(todo.summary)")
+        #expect(todo.summary.contains("- ") || todo.summary.contains("• "),
+                "bullets, as asked")
     }
 
     /// The recordings are as likely to be Dutch as English. Either the
@@ -220,7 +231,7 @@ struct IntegrationTests {
     /// fine; a generic error is not.
     @Test("Dutch is either summarized or refused by name")
     func dutch() async throws {
-        let engine = SummaryEngines.live()
+        let engine = SummaryEngines.apple()
         guard await engine.availability.isAvailable else { return }
 
         let transcript = """

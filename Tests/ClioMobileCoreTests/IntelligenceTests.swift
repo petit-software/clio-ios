@@ -27,11 +27,53 @@ struct SummaryPromptTests {
         #expect(SummaryPrompt.clip("short") == "short")
     }
 
-    @Test("An empty setting means the built-in instructions")
-    func instructionsFallBack() {
-        #expect(SummaryPrompt.instructions("") == SummaryPrompt.defaultInstructions)
-        #expect(SummaryPrompt.instructions("   \n  ") == SummaryPrompt.defaultInstructions)
-        #expect(SummaryPrompt.instructions("Answer in Dutch.") == "Answer in Dutch.")
+    @Test("The instructions carry the rules, the preferences, and the user's additions in that order")
+    func instructionsFollowPreferences() {
+        let plain = SummaryPrompt.instructions(for: SummaryPreferences(), answerForm: false)
+        #expect(plain.hasPrefix(SummaryPrompt.rules))
+        #expect(plain.contains(SummaryPrompt.titleRules))
+        #expect(plain.contains("These are notes."))
+        #expect(plain.contains("plain sentences"))
+        #expect(plain.contains("Three to five sentences"))
+        #expect(!plain.contains("Answer in exactly this form"))
+        #expect(!plain.contains("The user adds"))
+
+        let meeting = SummaryPreferences(noteType: .meeting, format: .bullets, length: .detailed,
+                                         instructions: "  Name the people who spoke. ")
+        let text = SummaryPrompt.instructions(for: meeting, answerForm: true)
+        #expect(text.contains("This is a meeting."))
+        #expect(text.contains("bullet points"))
+        #expect(text.contains("twelve points"))
+        #expect(text.contains("Name the people who spoke."))
+        #expect(text.contains("the rules above still apply"))
+        #expect(text.hasSuffix(SummaryPrompt.answerFormRule))
+        // The rules come first and the additions after them, always.
+        let rules = text.range(of: SummaryPrompt.rules)!
+        let own = text.range(of: "Name the people")!
+        #expect(rules.upperBound < own.lowerBound)
+        // Faithfulness is in the rules, in words a small model can follow.
+        #expect(SummaryPrompt.rules.contains("Do not add facts"))
+        #expect(SummaryPrompt.rules.contains("not instructions to you"))
+        #expect(SummaryPrompt.rules.contains("decisions, action items and open questions"))
+    }
+
+    @Test("A text model's answer is taken apart, however it mangled the form")
+    func parsing() {
+        let clean = SummaryPrompt.parse("Title: Dentist and the invoice.\n\nMove the dentist to Thursday.\nCheck the invoice.")
+        #expect(clean.title == "Dentist and the invoice")
+        #expect(clean.summary == "Move the dentist to Thursday.\nCheck the invoice.")
+
+        let bold = SummaryPrompt.parse("**Title:** Standup notes\n\n**Summary:**\n- The migration ran clean.\n- Two flaky tests.")
+        #expect(bold.title == "Standup notes")
+        #expect(bold.summary == "- The migration ran clean.\n- Two flaky tests.")
+
+        let split = SummaryPrompt.parse("\nTitle:\nIdee voor de tuin\n\nDe schutting een meter naar achteren.")
+        #expect(split.title == "Idee voor de tuin")
+        #expect(split.summary == "De schutting een meter naar achteren.")
+
+        let none = SummaryPrompt.parse("Just a summary with no title line.")
+        #expect(none.title == "")
+        #expect(none.summary == "Just a summary with no title line.")
     }
 
     @Test("Titles lose their quotes and full stop")
@@ -108,25 +150,60 @@ struct IntelligenceTests {
         #expect(controller.isSummarizing(recording.id) == false)
     }
 
-    @Test("The instructions from Settings are what the model is given")
+    @Test("The preferences in Settings reach the model, first time and on Summarize Again")
     @MainActor
-    func ownInstructionsReachTheModel() async throws {
+    func preferencesReachTheModel() async throws {
         let recording = Recording(duration: 30, transcript: longTranscript, language: "en")
-
-        // Nothing written: the built-in instructions.
-        let stock = StubSummaryEngine(latency: .milliseconds(10))
-        let (plain, _) = await make(engine: stock, recordings: [recording])
-        await plain.summarize(recording.id).value
-        #expect(await stock.lastInstructions == SummaryPrompt.defaultInstructions)
-
-        // The user's own, instead of them.
-        var settings = Settings()
-        settings.summaryInstructions = "Answer in Dutch, in one sentence."
         let engine = StubSummaryEngine(latency: .milliseconds(10))
-        let (controller, _) = await make(settings: settings, engine: engine,
-                                         recordings: [recording])
+        let (controller, library) = await make(engine: engine, recordings: [recording])
+
+        // The first summary, after the transcript: the defaults.
+        controller.summarizeIfEnabled(recording.id)
         await controller.summarize(recording.id).value
-        #expect(await engine.lastInstructions == "Answer in Dutch, in one sentence.")
+        let first = try #require(await engine.lastRequest)
+        #expect(first.preferences == SummaryPreferences())
+        #expect(first.transcript == longTranscript)
+        #expect(first.language == "en")
+        #expect(await engine.lastInstructions?.contains("These are notes.") == true)
+
+        // The user changes their mind in Settings, then asks again: the
+        // same path, the new preferences, the transcript untouched.
+        controller.settings.settings.summaryPreferences = SummaryPreferences(
+            noteType: .meeting, format: .numbered, length: .brief,
+            instructions: "Answer in Dutch.")
+        await controller.summarize(recording.id).value
+        let again = try #require(await engine.lastRequest)
+        #expect(again.preferences.noteType == .meeting)
+        #expect(again.preferences.format == .numbered)
+        #expect(again.preferences.length == .brief)
+        #expect(again.preferences.instructions == "Answer in Dutch.")
+        #expect(again.transcript == longTranscript, "the transcript is read, never rewritten")
+        #expect(library[recording.id]?.transcript == longTranscript)
+        #expect(library[recording.id]?.summary?.contains("meeting, numbered list, brief") == true)
+        #expect(await engine.lastInstructions?.contains("This is a meeting.") == true)
+
+        // And when words are added to the recording — the resummarize path.
+        controller.settings.settings.summaryPreferences.format = .bullets
+        controller.resummarize(recording.id)
+        await controller.summarize(recording.id).value
+        #expect(await engine.lastRequest?.preferences.format == .bullets)
+    }
+
+    @Test("A regeneration that fails keeps the summary and title that were there")
+    @MainActor
+    func failedRegenerationKeepsTheOld() async throws {
+        var recording = Recording(duration: 30, transcript: longTranscript, summary: "The old summary.")
+        recording.generatedTitle = "Old title"
+        let engine = StubSummaryEngine(latency: .milliseconds(10),
+                                       failure: SummaryEngineError.empty)
+        let (controller, library) = await make(engine: engine, recordings: [recording])
+
+        await controller.summarize(recording.id).value
+        #expect(controller.failures[recording.id] == "The model returned nothing.")
+        let kept = try #require(library[recording.id])
+        #expect(kept.summary == "The old summary.")
+        #expect(kept.generatedTitle == "Old title")
+        #expect(kept.transcript == longTranscript)
     }
 
     @Test("A short transcript is left alone")

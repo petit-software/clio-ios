@@ -17,7 +17,7 @@ struct RecordingDetailView: View {
     /// The part the player has loaded. Nil until something is loaded.
     @State private var playingPart: RecordingPart.ID?
     @State private var title = ""
-    @State private var confirmingDelete = false
+    @State private var deleting: DeletionRequest?
     @State private var copied = false
 
     var body: some View {
@@ -177,7 +177,7 @@ struct RecordingDetailView: View {
                     }
                     Section {
                         Button("Delete", systemImage: "trash", role: .destructive) {
-                            confirmingDelete = true
+                            deleting = DeletionRequest(ids: [id])
                         }
                     }
                 } label: {
@@ -185,21 +185,10 @@ struct RecordingDetailView: View {
                 }
             }
         }
-        // An alert, not a confirmation dialog: there is one thing to say
-        // yes or no to, and a dialog anchors itself to the menu it came
-        // from — a popover with a tail pointing at a button that is no
-        // longer there.
-        .alert("Delete this recording?", isPresented: $confirmingDelete) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
-                player.stop()
-                model.library.delete(id)
-                dismiss()
-            }
-        } message: {
-            Text(recording.parts.count > 1
-                 ? "All \(recording.parts.count) parts, audio and transcripts, are removed from this phone."
-                 : "The audio and its transcript are removed from this phone.")
+        // The same confirmation the list shows, and the same deletion.
+        .confirmDeletion($deleting, library: model.library) {
+            player.stop()
+            dismiss()
         }
         .onAppear {
             title = recording.displayTitle
@@ -367,20 +356,38 @@ struct RecordingDetailView: View {
         return model.intelligence.availability.isAvailable
     }
 
+    /// The summary that is there stays on screen while a new one is
+    /// written and when writing one fails: a failed Summarize Again costs
+    /// nothing, and says so above the words it left alone.
     @ViewBuilder
     private func summarySection(_ recording: Recording) -> some View {
+        let summary = recording.summary.flatMap { $0.isEmpty ? nil : $0 }
         if model.intelligence.isSummarizing(id) {
-            HStack(spacing: 8) { ProgressView(); Text("Summarizing…") }
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) { ProgressView(); Text(summary == nil ? "Summarizing…" : "Summarizing again…") }
+                    .foregroundStyle(.secondary)
+                if let summary {
+                    Text(summary)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.vertical, 4)
         } else if let failure = model.intelligence.failures[id] {
             VStack(alignment: .leading, spacing: 12) {
                 Label(failure, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.secondary)
-                Button("Try Again") { model.intelligence.summarize(id) }
-                    .buttonStyle(.bordered)
+                Button(summary == nil ? "Try Again" : "Summarize Again") {
+                    model.intelligence.summarize(id)
+                }
+                .buttonStyle(.bordered)
+                if let summary {
+                    Text(summary)
+                        .textSelection(.enabled)
+                }
             }
             .padding(.vertical, 4)
-        } else if let summary = recording.summary, !summary.isEmpty {
+        } else if let summary {
             Text(summary)
                 .textSelection(.enabled)
                 .padding(.vertical, 4)
