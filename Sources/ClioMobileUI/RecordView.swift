@@ -14,13 +14,12 @@ struct RecordView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var clockSize: CGFloat = 64
-    @State private var confirmingDiscard = false
     /// Recording has been asked for from this sheet: an idle state after
     /// it means the recording landed or was cancelled, and the sheet goes.
     @State private var started = false
     private let startsAutomatically: Bool
-    /// Called when the sheet should go: discarded, closed after a failure,
-    /// or the recording stopped. The root opens a recording that lands.
+    /// Called when the sheet should go: closed after a failure, or the
+    /// recording stopped. The root opens a recording that lands.
     private let onClose: () -> Void
 
     /// The controls' height and fills: the capsules the sheet has had all
@@ -69,17 +68,8 @@ struct RecordView: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        // A swipe down must not throw a recording away. The X asks first.
+        // A swipe down must not throw a recording away; Stop is the way out.
         .interactiveDismissDisabled(capture.state.isBusy)
-        .confirmationDialog("Discard this recording?", isPresented: $confirmingDiscard,
-                            titleVisibility: .visible) {
-            Button("Discard Recording", role: .destructive) {
-                Task { await close(cancelling: true) }
-            }
-            Button("Keep Recording", role: .cancel) {}
-        } message: {
-            Text("The audio so far is deleted.")
-        }
         .task {
             if startsAutomatically { await begin() }
         }
@@ -149,8 +139,9 @@ struct RecordView: View {
 
     // MARK: Controls
 
-    /// Pause, Stop, and the X that discards — the capsules the sheet had
-    /// before, each `actionHeight` tall and drawing its own fill.
+    /// Pause and Stop — the capsules the sheet had before, each
+    /// `actionHeight` tall and drawing its own fill. Stop saves; there is
+    /// no discard here, a recording nobody wants is deleted from the list.
     @ViewBuilder
     private func controls(_ capture: CaptureController) -> some View {
         switch capture.state {
@@ -189,9 +180,6 @@ struct RecordView: View {
                             in: Capsule(style: .continuous))
                 .disabled(!canStop)
                 .accessibilityLabel("Stop recording")
-                iconButton("xmark", label: "Discard recording", disabled: !capture.state.isBusy) {
-                    confirmingDiscard = true
-                }
             }
         }
     }
