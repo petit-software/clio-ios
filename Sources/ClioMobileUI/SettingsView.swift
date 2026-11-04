@@ -335,18 +335,26 @@ struct SettingsView: View {
                 ForEach(SummaryLength.allCases, id: \.self) { Text($0.name).tag($0) }
             }
             .greyMenu()
-            NavigationLink {
-                SummaryInstructionsEditor()
-            } label: {
-                LabeledContent("Instructions",
-                               value: store.settings.summaryPreferences.trimmedInstructions == nil
-                                   ? "None" : "Added")
-            }
         } header: {
             Text("Summaries")
         } footer: {
             Text("Applies to the next summary, and to Summarize Again on an existing "
                  + "recording. The transcript is not changed.")
+        }
+        // The user's additions to the prompt: "name who spoke", "answer in
+        // Dutch", "skip the small talk". Bound straight to the setting, so
+        // what is typed here is what the next summary — or Summarize Again
+        // — is asked for, the moment it is asked.
+        Section {
+            TextEditor(text: Binding(
+                get: { store.settings.summaryPreferences.instructions },
+                set: { store.settings.summaryPreferences.instructions = $0 }))
+                .frame(minHeight: 120)
+        } header: {
+            Text("Custom instructions")
+        } footer: {
+            Text("Added to every summary, and to Summarize Again. The summary still "
+                 + "sticks to what was said. Leave it empty for none.")
         }
     }
 
@@ -610,62 +618,6 @@ struct VocabularyEditor: View {
                 .components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
-        }
-    }
-}
-
-// MARK: - Summary instructions
-
-/// What the user adds to the built-in rules before the model is shown a
-/// transcript: "name who spoke", "answer in Dutch", "skip the small talk".
-///
-/// Additions, not a replacement. The rules that keep a summary faithful
-/// to the transcript — nothing invented, lists kept, decisions told from
-/// questions — always apply; this refines what comes out within them. The
-/// rules themselves are shown below the field, read-only, so it is clear
-/// what is being added to.
-struct SummaryInstructionsEditor: View {
-    @Environment(AppModel.self) private var model
-    @State private var text = ""
-    @State private var loaded = false
-
-    var body: some View {
-        Form {
-            Section {
-                TextEditor(text: $text)
-                    .frame(minHeight: 140)
-            } header: {
-                Text("Your instructions")
-            } footer: {
-                Text("Added to the built-in rules for every summary. Leave it empty "
-                     + "to use the rules alone.")
-            }
-            Section {
-                Button("Clear") { text = "" }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            Section {
-                Text(SummaryPrompt.rules)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            } header: {
-                Text("Built-in rules")
-            } footer: {
-                Text("The note type, format and length in Settings add a line each. "
-                     + "These rules always apply.")
-            }
-        }
-        .navigationTitle("Instructions")
-        .softScrollEdges()
-        .onAppear {
-            text = model.settings.settings.summaryPreferences.instructions
-            loaded = true
-        }
-        .onChange(of: text) { _, newValue in
-            // Not while the field is being filled in on appear.
-            guard loaded else { return }
-            model.settings.settings.summaryPreferences.instructions = newValue
         }
     }
 }
