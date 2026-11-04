@@ -215,11 +215,18 @@ shortcut before trusting the build. Settings ▸ Siri & Action Button shows
 the phrase (`SiriTipView`), opens the Shortcuts app (`ShortcutsLink`) and
 gives the Action button directions; no public URL opens that Settings page.
 
-**A control's intent runs in the widget extension.** It has no microphone,
-and iOS does not start capture from the background anyway. The intent
-opens `clio://record`; the app starts recording as it comes forward. Do not
-make the intent say recording has started. A locked phone asks for its
-unlock first, for any control that opens an app.
+**Two record intents, by where they run.** `StartRecordingIntent` is the
+App Shortcut: `openAppWhenRun`, so iOS brings the app forward and runs
+`perform` inside it, where `RecordRequests.handler` (set in
+`ClioMobileApp.init`) sets the pending action. It once returned
+`OpenURLIntent(clio://record)` instead; inside the app that is a second
+launch, Shortcuts refused it with "launch is prohibited" after Clio had
+opened, and nothing recorded. `RecordControlIntent` is the widget's
+control: it runs in the extension, which has no microphone and no view of
+the app, so it opens `clio://record` and the app starts recording as it
+comes forward. iOS does not start capture from the background anyway. Do
+not make either intent say recording has started. A locked phone asks for
+its unlock first, for any control that opens an app.
 
 **MLX on a phone is memory-bound.** The catalog's `memoryBytes` are
 estimates (about 1.6× the weights plus 300 MB); `LanguageModelSupport.fits`

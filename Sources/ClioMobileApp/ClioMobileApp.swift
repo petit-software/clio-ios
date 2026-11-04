@@ -68,6 +68,9 @@ struct ClioMobileApp: App {
         homeStyle = .default
         #endif
         _model = State(initialValue: model)
+        // Siri, Shortcuts and the Action button run StartRecordingIntent
+        // inside the app; this is what it does there.
+        RecordRequests.handler = { AppActions.shared.pending = .record }
         // Tells the system the shortcut's phrases, so Siri knows them
         // before the user ever opens Shortcuts.
         ClioShortcuts.updateAppShortcutParameters()

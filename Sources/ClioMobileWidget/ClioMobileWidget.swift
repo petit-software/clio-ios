@@ -15,7 +15,7 @@ struct ClioMobileWidgetBundle: WidgetBundle {
 }
 
 /// A button for the Lock Screen, Control Center and the Action button:
-/// "Record". It runs `StartRecordingIntent`, which opens the app on its
+/// "Record". It runs `RecordControlIntent`, which opens the app on its
 /// record URL; the app starts the microphone as it comes forward. The
 /// control cannot record on its own — the extension has no microphone and
 /// iOS does not start capture from the background — so the label says
@@ -26,7 +26,7 @@ struct RecordControl: ControlWidget {
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind) {
-            ControlWidgetButton(action: StartRecordingIntent()) {
+            ControlWidgetButton(action: RecordControlIntent()) {
                 Label("Record", systemImage: "mic.fill")
             }
         }

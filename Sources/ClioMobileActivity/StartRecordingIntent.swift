@@ -13,20 +13,17 @@ public enum ClioLinks {
     }
 }
 
-/// "Record with Clio." From Siri, Shortcuts, Spotlight, the Action button,
-/// and the Lock Screen and Control Center control in the widget extension.
+/// "Record with Clio." From Siri, Shortcuts, Spotlight and the Action
+/// button. `openAppWhenRun`: the system brings the app forward first and
+/// runs `perform` inside it, where the app has registered a handler that
+/// starts the recording. It cannot start recording by itself from the
+/// background; iOS does not allow an app to begin capturing audio there.
 ///
-/// Here, in the module both the app and the widget link, so the control
-/// can name it. Wherever it runs — in the app for Siri and the Action
-/// button, in the extension for the control — it does the same thing:
-/// opens the app on its record URL, and the root view starts recording.
-///
-/// It cannot start recording by itself. iOS does not let an app begin
-/// capturing audio from the background, and a control's intent runs in the
-/// extension, which has no microphone at all. So the honest result is
-/// "opening Clio to record": the app comes forward (unlocked first, if the
-/// phone was locked), the record sheet appears, and the microphone starts
-/// — there is no step for the user but the unlock.
+/// It once answered with `OpenURLIntent(clio://record)` instead, the same
+/// as the control below. Inside the app that is a second launch of an app
+/// already open, and Shortcuts refused it with "launch is prohibited"
+/// after Clio had come forward, so no recording started. The URL is for
+/// the extension, which has nothing else.
 public struct StartRecordingIntent: AppIntent {
     public static let title: LocalizedStringResource = "Start Recording"
     public static let description = IntentDescription("Opens Clio and starts a new recording.")
@@ -35,9 +32,37 @@ public struct StartRecordingIntent: AppIntent {
     public init() {}
 
     @MainActor
+    public func perform() async throws -> some IntentResult {
+        RecordRequests.handler?()
+        return .result()
+    }
+}
+
+/// The widget's control: "Record" on the Lock Screen, in Control Center
+/// and on the Action button's control list. It runs in the extension,
+/// which has no microphone and no view of the app, so it opens the app on
+/// its record URL and the root view starts recording as the app comes
+/// forward (unlocked first, if the phone was locked). Not offered in
+/// Shortcuts: `StartRecordingIntent` is the one for that.
+public struct RecordControlIntent: AppIntent {
+    public static let title: LocalizedStringResource = "Open Clio to Record"
+    public static let description = IntentDescription("Opens Clio and starts a new recording.")
+    public static let isDiscoverable = false
+
+    public init() {}
+
+    @MainActor
     public func perform() async throws -> some IntentResult & OpensIntent {
         .result(opensIntent: OpenURLIntent(ClioLinks.record))
     }
+}
+
+/// How `StartRecordingIntent` reaches the app it runs in. The app sets
+/// the handler at launch; in the widget extension there is none, and the
+/// intent is not used there.
+@MainActor
+public enum RecordRequests {
+    public static var handler: (@MainActor () -> Void)?
 }
 
 /// The intents in this module, for the app and the widget extension to
