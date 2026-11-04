@@ -586,8 +586,6 @@ struct AppHeader: View {
                 .frame(width: 88, height: 88)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-            Text("Clio")
-                .font(.title2.weight(.semibold))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
