@@ -97,7 +97,9 @@ struct RecordView: View {
 
     // MARK: Status
 
-    /// Where a title would be: a red dot and the word. Nothing around it.
+    /// Where a title would be: a red dot and the word, for every state but
+    /// the one the clock and the meter already show. While recording runs
+    /// it is kept but invisible, so nothing below it moves.
     private func statusPill(_ capture: CaptureController) -> some View {
         let recording = capture.state == .recording
         let word: String = switch capture.state {
@@ -115,8 +117,10 @@ struct RecordView: View {
             Text(word)
                 .font(.subheadline.weight(.semibold))
         }
+        .opacity(recording ? 0 : 1)
         .animation(.default, value: recording)
         .accessibilityLabel(word)
+        .accessibilityHidden(recording)
     }
 
     private func clock(_ capture: CaptureController) -> some View {
