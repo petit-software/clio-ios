@@ -76,6 +76,8 @@ struct RecordView: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+        // Solid, not glass: the list and the wash do not show through.
+        .presentationBackground(Color.windowBackground)
         // A swipe down must not throw a recording away; Stop is the way out.
         .interactiveDismissDisabled(capture.state.isBusy)
         .task {

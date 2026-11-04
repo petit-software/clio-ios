@@ -1210,8 +1210,9 @@ private extension SearchFieldPlacement {
     }
 }
 
-private extension Color {
-    /// What shows through the rounded corners where the panes meet.
+extension Color {
+    /// What shows through the rounded corners where the panes meet, and
+    /// the record sheet's solid background.
     static var windowBackground: Color {
         #if os(iOS)
         Color(uiColor: .systemBackground)
