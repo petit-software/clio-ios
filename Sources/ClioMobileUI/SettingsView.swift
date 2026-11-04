@@ -151,9 +151,17 @@ struct SettingsView: View {
             .softScrollEdges()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly)
-                        .tint(.primary)
+                    // Neutral: the glyph in the text colour, no tint at all.
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(Color.primary)
+                    }
+                    .buttonStyle(.plain)
+                    .tint(.primary)
+                    .accessibilityLabel("Close")
                 }
             }
         }

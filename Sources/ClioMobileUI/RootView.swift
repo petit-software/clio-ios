@@ -141,9 +141,16 @@ public struct RootView: View {
                     // is reaching for mid-selection.
                     if !chrome.selecting {
                         ToolbarItem(placement: .primaryAction) {
-                            Button("Settings", systemImage: "ellipsis") {
+                            Button {
                                 settingsSheet = SettingsSheet(page: nil)
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(Color.primary)
                             }
+                            .buttonStyle(.plain)
+                            .tint(.primary)
+                            .accessibilityLabel("Settings")
                         }
                     }
                 }
