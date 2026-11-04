@@ -143,6 +143,48 @@ struct IntegrationTests {
         #expect(recording.transcript.lowercased().contains("bread"))
     }
 
+    /// The bug this guards against: the last sentence of a recording spoken
+    /// more softly than the rest — a voice trailing off — was cut by the
+    /// trimmer before the model saw it, so the audio was whole and the
+    /// transcript ended a sentence early. The clip here is two sentences of
+    /// synthesized speech with the second at -20 dB, then a second of room.
+    /// The trimmer must keep it, and the model must read it.
+    @Test("The quiet last sentence of a recording reaches the transcript")
+    func quietTailIsTranscribed() async throws {
+        let installed = try await installTinyModel()
+        let engine = WhisperKitEngine()
+        try await engine.load(model: installed)
+
+        let loud = try makeSpokenAudio("The meeting moved to Thursday afternoon.")
+        let soft = try makeSpokenAudio("And bring the signed contract.").map { $0 * 0.1 }
+        let room = [Float](repeating: 0, count: Int(1.0 * AudioRecorder.sampleRate))
+        let clip = loud + soft + room
+
+        let trimmed = try #require(VoiceActivityTrimmer.trim(clip, sensitivity: 0.5))
+        let keptSeconds = Double(trimmed.samples.count) / AudioRecorder.sampleRate
+        let softStart = Double(loud.count) / AudioRecorder.sampleRate
+        let softEnd = Double(loud.count + soft.count) / AudioRecorder.sampleRate
+        print("[integration] clip \(Double(clip.count) / AudioRecorder.sampleRate)s, soft sentence \(softStart)–\(softEnd)s, trimmer kept \(trimmed.trimmedLeadingSeconds)–\(trimmed.trimmedLeadingSeconds + keptSeconds)s")
+        #expect(trimmed.trimmedLeadingSeconds + keptSeconds >= softEnd,
+                "the soft sentence is inside what the model is given")
+
+        let transcript = try await engine.transcribe(
+            samples: trimmed.samples, options: TranscribeOptions(language: "en"))
+        print("[integration] transcript: \(transcript.text)")
+        let text = transcript.text.lowercased()
+        #expect(text.contains("thursday"))
+        #expect(text.contains("contract"), "the quiet last sentence is in the transcript")
+
+        // What the old trimmer did, for the record: cut at the last loud
+        // frame plus 120 ms. The model then never heard the soft sentence.
+        let tight = Array(clip[0..<min(clip.count, loud.count + Int(0.12 * AudioRecorder.sampleRate))])
+        let before = try await engine.transcribe(
+            samples: tight, options: TranscribeOptions(language: "en"))
+        print("[integration] with the old cut: \(before.text)")
+
+        await engine.unload()
+    }
+
     /// The real language model, on this Mac. Passes trivially, with the
     /// reason printed, on a Mac without Apple Intelligence: the point is to
     /// prove the call shape and the output when it can run, not to fail a

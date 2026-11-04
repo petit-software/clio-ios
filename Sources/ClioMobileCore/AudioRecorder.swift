@@ -308,17 +308,26 @@ public final class AudioRecorder: AudioCapturing, @unchecked Sendable {
     private func teardown() {
         lock.lock()
         let wasRunning = isRunning
-        isRunning = false
-        isInterrupted = false
-        currentLevel = 0
-        currentBands = [Float](repeating: 0, count: MeterAnalyzer.barCount)
         let observers = self.observers
         self.observers = []
         lock.unlock()
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        if wasRunning {
+            // The tap first, and only then the flag: a buffer that is in
+            // the callback as Stop is pressed is the last twenty
+            // milliseconds of what was said, and `append` drops anything
+            // that arrives once `isRunning` is down. `removeTap` returns
+            // when no more callbacks will come.
+            _ = ObjCException.catching { self.engine.inputNode.removeTap(onBus: 0) }
+            _ = ObjCException.catching { self.engine.stop() }
+        }
+        lock.lock()
+        isRunning = false
+        isInterrupted = false
+        currentLevel = 0
+        currentBands = [Float](repeating: 0, count: MeterAnalyzer.barCount)
+        lock.unlock()
         guard wasRunning else { return }
-        _ = ObjCException.catching { self.engine.inputNode.removeTap(onBus: 0) }
-        _ = ObjCException.catching { self.engine.stop() }
         converter = nil
         converterInput = nil
         #if os(iOS)

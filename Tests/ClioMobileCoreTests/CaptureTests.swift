@@ -341,6 +341,102 @@ struct CaptureTests {
         }
     }
 
+    @Test("The row is in the library before the transcript is, and opens after")
+    @MainActor
+    func rowLandsBeforeTheTranscript() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(
+            recorder: recorder, engine: StubTranscriptionEngine(latency: .milliseconds(400)))
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        let stopping = Task { await controller.stop() }
+        try await settle(until: { controller.state == .transcribing })
+
+        // Mid-transcription: a pending row with its audio, saying so.
+        let pending = try #require(library.recordings.first)
+        #expect(pending.status == .pending)
+        #expect(controller.isTranscribing(pending))
+        #expect(controller.lastRecordingID == nil, "not opened until the words are in")
+        #expect(FileManager.default.fileExists(atPath: library.audioURL(for: pending).path))
+
+        await stopping.value
+        let done = try #require(library[pending.id])
+        #expect(done.status == .transcribed)
+        #expect(controller.isTranscribing(done) == false)
+        #expect(controller.lastRecordingID == pending.id)
+        #expect(library.recordings.count == 1, "the same row, not a second one")
+    }
+
+    @Test("Cancelling mid-transcription keeps the audio as a pending recording")
+    @MainActor
+    func cancelWhileTranscribingKeepsTheAudio() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(
+            recorder: recorder, engine: StubTranscriptionEngine(latency: .seconds(5)))
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        let stopping = Task { await controller.stop() }
+        try await settle(until: { controller.state == .transcribing })
+        await controller.cancel()
+        await stopping.value
+
+        #expect(controller.state == .idle)
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .pending, "Transcribe Again picks it up")
+        #expect(FileManager.default.fileExists(atPath: library.audioURL(for: recording).path))
+        #expect(controller.isTranscribing(recording) == false)
+        #expect(controller.lastRecordingID == nil, "a cancelled transcript does not open")
+    }
+
+    @Test("A transcription that fails keeps the audio and says why")
+    @MainActor
+    func failedTranscriptionKeepsTheAudio() async throws {
+        struct Broken: LocalizedError { var errorDescription: String? { "The model ran out of memory." } }
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(
+            recorder: recorder,
+            engine: StubTranscriptionEngine(latency: .milliseconds(10), failure: Broken()))
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await controller.start()
+        await controller.stop()
+        let recording = try #require(library.recordings.first)
+        #expect(recording.status == .failed("The model ran out of memory."))
+        #expect(FileManager.default.fileExists(atPath: library.audioURL(for: recording).path))
+        #expect(controller.lastRecordingID == recording.id, "it opens, and the detail offers Transcribe Again")
+        #expect(controller.state == .idle)
+    }
+
+    @Test("Recording into a recording places the part before its words arrive")
+    @MainActor
+    func appendedPartLandsPending() async throws {
+        let recorder = SimulatedRecorder()
+        recorder.simulatedElapsed = 2
+        let (controller, library, directory) = try makeController(
+            recorder: recorder, engine: StubTranscriptionEngine(latency: .milliseconds(300)))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let existing = Recording(duration: 3, transcript: "First part.")
+        try AudioFiles.write([Float](repeating: 0.1, count: 16_000), to: library.audioURL(for: existing))
+        library.add(existing)
+
+        controller.appendTarget = existing.id
+        await controller.start()
+        let stopping = Task { await controller.stop() }
+        try await settle(until: { controller.state == .transcribing })
+        let target = try #require(library[existing.id])
+        #expect(target.parts.count == 2)
+        #expect(target.parts[1].status == .pending)
+        #expect(controller.isTranscribing(target))
+        await stopping.value
+        #expect(library[existing.id]?.parts[1].status == .transcribed)
+        #expect(library.recordings.count == 1)
+    }
+
     @Test("Keep in memory off unloads the model after each transcription")
     @MainActor
     func unloadsWhenNotKept() async throws {

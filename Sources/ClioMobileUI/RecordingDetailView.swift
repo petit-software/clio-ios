@@ -341,7 +341,13 @@ struct RecordingDetailView: View {
             Label("Nothing was heard in this recording.", systemImage: "waveform.slash")
                 .foregroundStyle(.secondary)
         case .pending:
-            transcribeAgain("Not transcribed yet.")
+            if model.capture.isTranscribing(part) {
+                HStack(spacing: 8) { ProgressView(); Text("Transcribing…") }
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                transcribeAgain("Not transcribed yet.")
+            }
         case .failed(let message):
             transcribeAgain(message)
         }
@@ -386,10 +392,12 @@ struct RecordingDetailView: View {
     }
 
     private func transcribeAgain(_ message: String) -> some View {
+        let recording = model.library[id]
+        return
         VStack(alignment: .leading, spacing: 12) {
             Label(message, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.secondary)
-            if model.capture.state == .transcribing {
+            if let recording, model.capture.isTranscribing(recording) {
                 HStack(spacing: 8) { ProgressView(); Text("Transcribing…") }
                     .foregroundStyle(.secondary)
             } else {
@@ -397,6 +405,7 @@ struct RecordingDetailView: View {
                     Task { await model.capture.retranscribe(id) }
                 }
                 .buttonStyle(.bordered)
+                .disabled(model.capture.state.isBusy)
             }
         }
         .padding(.vertical, 4)

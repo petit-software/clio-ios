@@ -53,11 +53,10 @@ private struct SearchingReporter: View {
 
 /// The library, newest first, grouped by day. The record button sits
 /// under it so it is never more than one tap away — as a pane or floating,
-/// see `HomeStyle`; a capsule when the phone is sideways and height is
-/// short.
+/// see `HomeStyle`. The phone is portrait only (Info.plist), so there is
+/// no sideways layout.
 struct RecordingsListView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var query = ""
     /// Up while the "Copied" toast is on screen.
     @State private var copied = false
@@ -152,9 +151,7 @@ struct RecordingsListView: View {
 
     @ViewBuilder
     private var layout: some View {
-        if verticalSizeClass == .compact {
-            landscape
-        } else if style == .floating {
+        if style == .floating {
             floating
         } else {
             portrait
@@ -236,21 +233,6 @@ struct RecordingsListView: View {
         #endif
     }
 
-    /// Sideways there is no height to give a pane to: a capsule under the
-    /// list, as it was before the strip.
-    private var landscape: some View {
-        VStack(spacing: 0) {
-            content
-            if !needsModelFirst {
-                Divider()
-                RecordCapsule(action: onRecord)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.groupedBackground)
-            }
-        }
-    }
-
     @ViewBuilder
     private var content: some View {
         Group {
@@ -290,6 +272,7 @@ struct RecordingsListView: View {
                 Section(section.day) {
                     ForEach(section.recordings) { recording in
                         RecordingRow(recording: recording,
+                                     transcribing: model.capture.isTranscribing(recording),
                                      selecting: selecting,
                                      selected: selection.contains(recording.id)) {
                             showCopied()
@@ -413,6 +396,9 @@ struct RecordingsListView: View {
 /// detail view; the row does not repeat it.
 struct RecordingRow: View {
     let recording: Recording
+    /// The transcript is being written right now: the row says so instead
+    /// of "Not transcribed yet", which is what a pending part reads as.
+    var transcribing = false
     /// Rows are being picked: the tick takes the copy button's place, so
     /// the row's trailing edge means one thing at a time.
     var selecting = false
@@ -439,7 +425,7 @@ struct RecordingRow: View {
                 Text(recording.displayTitle)
                     .font(.headline)
                     .lineLimit(1)
-                Text(recording.snippet)
+                Text(transcribing && recording.transcript.isEmpty ? "Transcribing…" : recording.snippet)
                     .font(.subheadline)
                     .foregroundStyle(recording.status == .transcribed ? .secondary : .tertiary)
                     .lineLimit(1)
@@ -1120,38 +1106,6 @@ struct HoldRecordButton: View {
     }
 }
 
-/// The landscape button: a full-width green capsule that says "Record".
-struct RecordCapsule: View {
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text("Record")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Accent.ink)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-        }
-        .prominentStyle()
-        .buttonBorderShape(.capsule)
-        .tint(Accent.lime)
-        .controlSize(.large)
-        .accessibilityHint("Starts a new recording")
-    }
-}
-
-private extension View {
-    /// Liquid Glass on iOS 26, the plain filled capsule before it.
-    @ViewBuilder
-    func prominentStyle() -> some View {
-        if #available(iOS 26, macOS 26, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
-    }
-}
-
 /// The window background in the two corners of a pane's bottom edge, so
 /// the pane looks rounded without touching the pane.
 private struct CornerCaps: View {
@@ -1200,15 +1154,6 @@ private extension SearchFieldPlacement {
 }
 
 private extension Color {
-    /// The list's own ground.
-    static var groupedBackground: Color {
-        #if os(iOS)
-        Color(uiColor: .systemGroupedBackground)
-        #else
-        Color(nsColor: .windowBackgroundColor)
-        #endif
-    }
-
     /// What shows through the rounded corners where the panes meet.
     static var windowBackground: Color {
         #if os(iOS)

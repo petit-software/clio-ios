@@ -56,6 +56,40 @@ struct RecordingStoreTests {
         #expect(store.audioBytes == 100)
     }
 
+    @Test("A part is replaced in place, and removed with its audio")
+    @MainActor
+    func replaceAndRemovePart() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = RecordingStore(indexURL: directory.appendingPathComponent("r.json"),
+                                   audioDirectory: directory)
+        var recording = Recording(duration: 1, transcript: "one")
+        let second = RecordingPart(duration: 2, status: .pending)
+        recording.parts.append(second)
+        for part in recording.parts { try Data([1]).write(to: store.audioURL(for: part)) }
+        store.add(recording)
+
+        var finished = second
+        finished.transcript = "two"
+        finished.status = .transcribed
+        store.replace(finished, in: recording.id)
+        #expect(store[recording.id]?.parts[1].transcript == "two")
+        #expect(store[recording.id]?.status == .transcribed)
+
+        store.removePart(second.id, from: recording.id)
+        #expect(store[recording.id]?.parts.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: store.audioURL(for: second).path))
+
+        // The last part takes the recording with it.
+        store.removePart(recording.parts[0].id, from: recording.id)
+        #expect(store[recording.id] == nil)
+        #expect(!FileManager.default.fileExists(atPath: store.audioURL(for: recording.parts[0]).path))
+
+        // A recording that has gone is left alone.
+        store.replace(finished, in: recording.id)
+        #expect(store.recordings.isEmpty)
+    }
+
     @Test("A recording decodes with missing optional fields")
     func tolerantDecoding() throws {
         let id = UUID()

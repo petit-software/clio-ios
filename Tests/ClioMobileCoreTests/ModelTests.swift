@@ -320,9 +320,14 @@ struct TrimmerTests {
 
         let result = try #require(VoiceActivityTrimmer.trim(clip, sensitivity: 0.5))
         let seconds = Double(result.samples.count) / AudioRecorder.sampleRate
-        #expect(seconds > 1 && seconds < 1.5)
-        #expect(result.trimmedLeadingSeconds > 1.5)
-        #expect(result.trimmedTrailingSeconds > 1.5)
+        // The speech, the quarter second before it and the second after:
+        // the pads are the trimmer's, and the last word is the one a tight
+        // pad clipped.
+        let padded = 1 + VoiceActivityTrimmer.leadingPaddingSeconds
+            + VoiceActivityTrimmer.trailingPaddingSeconds
+        #expect(seconds > padded - 0.11 && seconds < padded + 0.11)
+        #expect(result.trimmedLeadingSeconds > 2 - VoiceActivityTrimmer.leadingPaddingSeconds - 0.11)
+        #expect(result.trimmedTrailingSeconds > 2 - VoiceActivityTrimmer.trailingPaddingSeconds - 0.11)
         #expect(abs(result.totalTrimmedSeconds + seconds - 5) < 0.001)
     }
 

@@ -151,6 +151,33 @@ public final class RecordingStore {
         return true
     }
 
+    /// A part's words landed, or changed: the part with that id is written
+    /// over. Nothing happens if the recording has gone in the meantime —
+    /// its audio went with it.
+    public func replace(_ part: RecordingPart, in id: Recording.ID) {
+        guard var recording = self[id],
+              let index = recording.parts.firstIndex(where: { $0.id == part.id })
+        else { return }
+        recording.parts[index] = part
+        update(recording)
+    }
+
+    /// A part out again, audio and all. The only part takes the recording
+    /// with it.
+    public func removePart(_ partID: RecordingPart.ID, from id: Recording.ID) {
+        guard var recording = self[id],
+              let index = recording.parts.firstIndex(where: { $0.id == partID })
+        else { return }
+        try? FileManager.default.removeItem(at: audioURL(for: recording.parts[index]))
+        if recording.parts.count == 1 {
+            recordings.removeAll { $0.id == id }
+            save()
+            return
+        }
+        recording.parts.remove(at: index)
+        update(recording)
+    }
+
     /// Several recordings as one, under the oldest's id. Nothing is deleted
     /// from disk: every file is a part of the merged recording now. Returns
     /// the merged recording's id.

@@ -94,6 +94,11 @@ public final class CaptureController {
     /// Between the lift and the verdict: the state is still a capturing one
     /// and must not take a second stop.
     private var stopping = false
+    /// The parts whose transcript is being written right now. The row is in
+    /// the library before the model is asked — see `finish` — so this is
+    /// what lets the list and the detail say "Transcribing…" on it rather
+    /// than "Not transcribed yet".
+    public private(set) var transcribingParts: Set<RecordingPart.ID> = []
 
     public init(recorder: any AudioCapturing,
                 engine: any TranscriptionEngine,
@@ -136,6 +141,15 @@ public final class CaptureController {
     }
 
     public var maxSeconds: Double { settings.settings.maxRecordingSeconds }
+
+    /// Whether any part of this recording is being transcribed right now.
+    public func isTranscribing(_ recording: Recording) -> Bool {
+        recording.parts.contains { transcribingParts.contains($0.id) }
+    }
+
+    public func isTranscribing(_ part: RecordingPart) -> Bool {
+        transcribingParts.contains(part.id)
+    }
 
     // MARK: Model
 
@@ -259,6 +273,9 @@ public final class CaptureController {
             appendingTo = nil
             state = .idle
         case .transcribing:
+            // The row and its audio stay: the part went into the library
+            // before the model was asked, and a transcript that was stopped
+            // is a pending one, with Transcribe Again on it. Nothing opens.
             appendingTo = nil
             transcribeTask?.cancel()
             transcribeTask = nil
@@ -325,28 +342,45 @@ public final class CaptureController {
         // for it. Transcribe Again is there if the gate got it wrong.
         guard verdict.isSpeech else {
             part.status = .nothingHeard
-            land(part, location: location, into: target)
+            lastRecordingID = place(part, location: location, into: target)
             state = .idle
             return
         }
 
+        // Into the library now, as a pending part, and the words follow. A
+        // transcript that fails, a cancel, a screen locked for long enough
+        // that iOS ends the app while the model runs: every one of those
+        // used to leave a WAV on disk that no row pointed at, which is a
+        // recording lost. Now each leaves the row with its audio and
+        // Transcribe Again on it. The recording opens once the words are in.
+        let recordingID = place(part, location: location, into: target)
+        transcribingParts.insert(part.id)
         let task = Task { [weak self] in
             guard let self else { return }
+            // A little more time from iOS if the screen locks meanwhile:
+            // enough for a transcript that was a second from done.
+            let work = BackgroundWork.begin("Transcribe")
+            defer { work.end() }
             await self.transcribe(result.samples, into: &part)
+            self.transcribingParts.remove(part.id)
+            // Cancelled: the part stays as it was placed, pending.
             guard !Task.isCancelled else { return }
             if self.discardSilence, part.status == .nothingHeard {
-                self.discard(audioURL)
+                // A held capture the gate let through and the model heard
+                // nothing in: gone, as if it never happened.
+                self.library.removePart(part.id, from: recordingID)
                 self.state = .idle
                 return
             }
-            let landed = self.land(part, location: location, into: target)
+            self.library.replace(part, in: recordingID)
+            self.lastRecordingID = recordingID
             self.state = .idle
             if target != nil {
                 // More words under the same title: the summary is about
                 // all of them, so it is written again.
-                self.intelligence?.resummarize(landed)
+                self.intelligence?.resummarize(recordingID)
             } else {
-                self.intelligence?.summarizeIfEnabled(landed)
+                self.intelligence?.summarizeIfEnabled(recordingID)
             }
         }
         transcribeTask = task
@@ -356,26 +390,19 @@ public final class CaptureController {
 
     /// Into the library: a part at the end of the target, or a recording of
     /// its own when there is no target, or it was deleted while this one
-    /// was being made. Returns the recording it landed in.
-    @discardableResult
-    private func land(_ part: RecordingPart, location: RecordingLocation?,
-                      into target: Recording.ID?) -> Recording.ID {
+    /// was being made. Returns the recording it went into. Does not touch
+    /// `lastRecordingID`: that is set when the recording is ready to open.
+    private func place(_ part: RecordingPart, location: RecordingLocation?,
+                       into target: Recording.ID?) -> Recording.ID {
         appendingTo = nil
         if let target, library.append(part, to: target) {
-            lastRecordingID = target
             return target
         }
         var recording = Recording(id: part.id, createdAt: part.createdAt, duration: 0,
                                   location: location)
         recording.parts = [part]
         library.add(recording)
-        lastRecordingID = recording.id
         return recording.id
-    }
-
-    /// A capture with nothing in it, gone as if it never happened.
-    private func discard(_ audioURL: URL) {
-        try? FileManager.default.removeItem(at: audioURL)
     }
 
     /// Transcribe an existing recording again — after a failure, or with a
@@ -383,7 +410,12 @@ public final class CaptureController {
     public func retranscribe(_ id: Recording.ID) async {
         guard !state.isBusy, var recording = library[id] else { return }
         state = .transcribing
+        let work = BackgroundWork.begin("Transcribe again")
+        defer { work.end() }
         for index in recording.parts.indices {
+            let partID = recording.parts[index].id
+            transcribingParts.insert(partID)
+            defer { transcribingParts.remove(partID) }
             do {
                 let samples = try AudioFiles.read(library.audioURL(for: recording.parts[index]))
                 await transcribe(samples, into: &recording.parts[index])

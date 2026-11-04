@@ -91,9 +91,13 @@ public protocol TranscriptionEngine: AnyObject, Sendable {
 public actor StubTranscriptionEngine: TranscriptionEngine {
     private var loaded = false
     private let latency: Duration
+    /// Thrown by every transcription, for a test of what a failure leaves
+    /// behind.
+    private let failure: (any Error)?
 
-    public init(latency: Duration = .milliseconds(600)) {
+    public init(latency: Duration = .milliseconds(600), failure: (any Error)? = nil) {
         self.latency = latency
+        self.failure = failure
     }
 
     public var modelID: String? { "stub" }
@@ -112,6 +116,7 @@ public actor StubTranscriptionEngine: TranscriptionEngine {
     public func transcribe(samples: [Float],
                            options: TranscribeOptions) async throws -> Transcript {
         try await Task.sleep(for: latency)
+        if let failure { throw failure }
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
         let first = String(format: "[Clio stub] captured %.1fs of audio (%d samples).",
                            seconds, samples.count)
