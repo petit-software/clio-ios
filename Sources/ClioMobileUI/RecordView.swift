@@ -139,9 +139,9 @@ struct RecordView: View {
 
     // MARK: Controls
 
-    /// Pause and Stop — the capsules the sheet had before, each
-    /// `actionHeight` tall and drawing its own fill. Stop saves; there is
-    /// no discard here, a recording nobody wants is deleted from the list.
+    /// Pause, Stop and Start again — the capsules the sheet has had all
+    /// along, each `actionHeight` tall and drawing its own fill. Stop
+    /// saves; Start again throws the capture away and records afresh.
     @ViewBuilder
     private func controls(_ capture: CaptureController) -> some View {
         switch capture.state {
@@ -180,6 +180,12 @@ struct RecordView: View {
                             in: Capsule(style: .continuous))
                 .disabled(!canStop)
                 .accessibilityLabel("Stop recording")
+                iconButton("arrow.counterclockwise", label: "Start again", disabled: !canStop) {
+                    Task {
+                        await capture.cancel()
+                        await begin()
+                    }
+                }
             }
         }
     }
