@@ -81,6 +81,9 @@ targets:
         # Resources/Clio.entitlements.
         CODE_SIGN_ENTITLEMENTS: Resources/Clio.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The app's colour is the icon's: olive on light, lime on dark.
+        # Nothing in the app is the system blue.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
         CODE_SIGN_STYLE: Automatic

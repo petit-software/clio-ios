@@ -213,8 +213,8 @@ struct ModelRow: View {
 
     static let slot: CGFloat = 28
 
-    /// What sits in the slot: a blue arrow to download, a small ring while
-    /// it comes down (tap to cancel), a green check once it is here —
+    /// What sits in the slot: an arrow in the app's colour to download, a
+    /// small ring while it comes down (tap to cancel), a green check once it is here —
     /// filled for the one in use, outlined for the rest.
     @ViewBuilder
     private var trailing: some View {
@@ -239,7 +239,7 @@ struct ModelRow: View {
             }
             .labelStyle(.iconOnly)
             .font(.title2)
-            .foregroundStyle(.blue)
+            .foregroundStyle(.tint)
             .buttonStyle(.borderless)
         }
     }
@@ -259,7 +259,7 @@ private struct DownloadRing: View {
                     .stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
                 Circle()
                     .trim(from: 0, to: max(0.02, min(1, fraction)))
-                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.2), value: fraction)
             }
