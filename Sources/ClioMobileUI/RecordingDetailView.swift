@@ -530,14 +530,40 @@ final class AudioPlayerController {
 
     private var player: AVAudioPlayer?
     private var ticker: Task<Void, Never>?
+    /// Which load is the current one; an older one that finishes late is
+    /// dropped rather than put in place of a newer part.
+    private var loadGeneration = 0
 
+    /// An `AVAudioPlayer` is not Sendable; this carries one back from the
+    /// thread that made it to the main actor, which is the only place it
+    /// is used from then on.
+    private struct Prepared: @unchecked Sendable {
+        let player: AVAudioPlayer?
+    }
+
+    /// Opens the file and primes the player off the main thread.
+    /// `prepareToPlay` activates the audio session, which blocks, and
+    /// Xcode flags it as a hang risk on the main thread; the transport
+    /// buttons stay disabled until it is back.
     func load(_ url: URL) {
         stop()
-        player = try? AVAudioPlayer(contentsOf: url)
-        player?.prepareToPlay()
-        duration = player?.duration ?? 0
+        player = nil
+        isAvailable = false
+        duration = 0
         currentTime = 0
-        isAvailable = player != nil
+        loadGeneration += 1
+        let generation = loadGeneration
+        Task { [weak self] in
+            let prepared = await Task.detached(priority: .userInitiated) {
+                let player = try? AVAudioPlayer(contentsOf: url)
+                player?.prepareToPlay()
+                return Prepared(player: player)
+            }.value
+            guard let self, self.loadGeneration == generation else { return }
+            self.player = prepared.player
+            self.duration = prepared.player?.duration ?? 0
+            self.isAvailable = prepared.player != nil
+        }
     }
 
     func toggle() {
