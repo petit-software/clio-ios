@@ -35,8 +35,8 @@ final class RecordFlowUITests: XCTestCase {
         record.tap()
         app.tap()   // gives the interruption monitor its turn
 
-        // The sheet counts down three seconds, then the microphone starts
-        // and the stop button comes alive.
+        // The microphone starts as the sheet appears, and the stop button
+        // comes alive with it.
         let stop = app.buttons["Stop recording"]
         let enabled = NSPredicate(format: "isEnabled == true")
         let started = XCTNSPredicateExpectation(predicate: enabled, object: stop)

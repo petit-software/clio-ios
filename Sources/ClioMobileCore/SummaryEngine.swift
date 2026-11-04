@@ -136,6 +136,8 @@ public enum SummaryPrompt {
         - Keep lists the speaker spelled out, with every item. Keep the order \
         when the order matters.
         - Keep the context a point needs: who, what, when, as the speaker gave it.
+        - Keep numbers, amounts and times as they were said. Do not add a currency, \
+        a unit or a date the speaker did not say.
         - Tell decisions, action items and open questions apart when the \
         transcript has them. A question is not a decision; a maybe is not a plan.
         - Write in the transcript's language.
@@ -212,16 +214,31 @@ public enum SummaryPrompt {
         return parts.joined(separator: "\n\n")
     }
 
-    /// For a text model: the first line is the title, then the summary.
+    /// For a text model that is asked for both at once: the first line is
+    /// the title, then the summary. Small models copy a placeholder in
+    /// angle brackets as if it were the answer, so none is used.
     public static let answerFormRule = """
-        Answer in exactly this form, with nothing before or after it:
-        Title: <the title>
-
-        <the summary>
+        Answer in exactly this form, with nothing before or after it. The \
+        first line is the word Title, a colon, and the title; then an empty \
+        line; then the summary.
         """
 
     public static func prompt(for transcript: String) -> String {
         "Transcript:\n\n" + clip(transcript)
+    }
+
+    /// The title on its own, for a text model asked in two steps: the
+    /// notes first, then — given the notes — a title. Small models that
+    /// cannot keep a two-part form straight manage one answer at a time.
+    /// The rules on faithfulness still head the instructions; the title is
+    /// judged against the notes it names.
+    public static let titleInstructions = rules + "\n\n" + titleRules + """
+         Answer with the title only: no label, no quotation marks, nothing else.
+        """
+
+    public static func titlePrompt(forNotes notes: String, transcript: String) -> String {
+        "Notes:\n\n" + clip(notes, to: 2_000) + "\n\nThe transcript they are about begins:\n\n"
+            + clip(transcript, to: 1_500)
     }
 
     /// A text model's answer, taken apart: the title off its first line,
@@ -273,7 +290,11 @@ public enum SummaryPrompt {
         var title = raw
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "*", with: "")
+            .replacingOccurrences(of: "<", with: "")
+            .replacingOccurrences(of: ">", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // A label a model put on its answer anyway.
+        if let value = titleValue(in: title) { title = value }
         let quotes: Set<Character> = ["\"", "“", "”", "'", "‘", "’", "«", "»"]
         while let first = title.first, quotes.contains(first) { title.removeFirst() }
         while let last = title.last, quotes.contains(last) || last == "." { title.removeLast() }

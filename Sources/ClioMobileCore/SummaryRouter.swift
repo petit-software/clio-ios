@@ -116,7 +116,7 @@ public final class SummaryRouter: SummaryEngine, @unchecked Sendable {
                 return route(to: other)
             }
             let name = languageModels.displayName(for: id)
-            return .none(reason: "\(name) is not downloaded. Download it in Settings ▸ Intelligence.")
+            return .none(reason: "\(name) is not downloaded. Download it in Settings ▸ Models.")
 
         case .apple:
             if appleAvailability.isAvailable { return .apple }
@@ -126,7 +126,7 @@ public final class SummaryRouter: SummaryEngine, @unchecked Sendable {
             }
             let reason = appleAvailability.reason ?? "Apple Intelligence is not available."
             if case .supported = deviceSupport {
-                return .none(reason: reason + " A downloaded model can write them instead: Settings ▸ Intelligence.")
+                return .none(reason: reason + " A downloaded model can write them instead: Settings ▸ Models.")
             }
             return .none(reason: reason)
         }

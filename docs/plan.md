@@ -320,6 +320,112 @@ each rising with the part of the voice it hears. `MeterAnalyzer` is the
 Mac app's, widened to six bands, fed from the tap on the raw hardware
 buffer.
 
+### M7 — the release candidate  ✓ (host and simulator; the phone is next)
+
+Seven things asked for at once, in the order they were done.
+
+- **The last sentence stays.** Audio files were whole and transcripts
+  ended a sentence early. The trimmer cut at the last frame over the
+  energy gate plus 120 ms, and a voice trailing off is ten decibels under
+  its start; the edge is now walked outward through frames above a lower
+  gate and padded by a second (`VoiceActivityTrimmer`), and the recorder
+  removes its tap before lowering its flag so the buffer in flight at
+  Stop is kept. `IntegrationTests/quietTailIsTranscribed` shows the real
+  model losing "and bring the signed contract" with the old cut and
+  keeping it now. The part goes into the library as pending *before* the
+  model is asked, and its words are written over it after: a cancel (the
+  X on the Transcribing pill), a failure or a kill leaves the row with its
+  audio and Transcribe Again, never a WAV without a row. Transcription
+  asks iOS for background time.
+- **The record sheet is a system sheet** at medium height in the phone's
+  appearance, recording from the moment it appears: a red pill that says
+  Recording, the clock, the meter, and the pause, Stop and discard
+  capsules in the bottom inset. The meter's analyser is retuned so a voice
+  at arm's length fills the bars without pinning them and room noise does
+  not fidget (`MeterSteadinessTests`). Reduce Motion flattens the wash,
+  stops the dots and the recede, and keeps the clock still. A held
+  recording shows a red dot and, with Settings ▸ Recording ▸ Live
+  transcript preview on, a rough transcript of the last half minute every
+  two seconds, marked as a preview; the saved transcript is made from the
+  whole recording at stop (`CaptureTests/livePreview`).
+- **One deletion confirmation** from the list bar, a swipe and the detail
+  menu, through `RecordingDeletion`, `View.confirmDeletion` and
+  `RecordingStore.delete`.
+- **One prompt for every summary.** `SummaryPreferences` — note type,
+  format, length, the user's additions — in Settings ▸ Intelligence;
+  every path builds a `SummaryRequest` from them as they stand, and every
+  engine turns it into the same instructions through `SummaryPrompt`:
+  fixed rules on faithfulness, lists, decisions versus questions, no
+  invented owners or deadlines, the transcript as material; then a line
+  each for the preferences; then the user's additions; the answer form
+  only for a text model. Summarize Again was already the same path; what
+  overrode the settings was the Foundation Models guide text ("one to
+  three sentences"), now neutral, and the absence of any shape settings.
+  A failed regeneration keeps the old summary and shows the failure above
+  it (`IntelligenceTests`).
+- **Summaries without Apple Intelligence.** An MLX language model,
+  downloaded from Hugging Face by the same `ModelManager` (a second
+  `ModelLayout`) into its own folder and run on the GPU by
+  `MLXSummaryEngine`, behind `SummaryRouter`, which reads
+  `Settings.summaryModel` on every request and keeps it pointing at a
+  model that can run. Compatibility is read from the device, not its
+  name: a Metal GPU of the Apple7 family or later and the memory the
+  process may still take (`LanguageModelSupport`). Three models are
+  offered; see the table below. The app carries the increased memory
+  limit entitlement. MLX does not run on the simulator; the engine says so.
+- **Entry points.** `StartRecordingIntent` lives in the shared module and
+  answers by opening `clio://record`; the same intent serves Siri,
+  Shortcuts, the Action button and a new `RecordControl` for the Lock
+  Screen and Control Center. A control's intent runs in the widget
+  extension, which has no microphone, and iOS does not start capture from
+  the background, so the control opens Clio to record and says so; a
+  locked phone asks for its unlock first.
+- **Portrait only** on the phone; the sideways layout is gone.
+
+The language models, measured on this Mac (an M-series GPU; a phone is
+slower and the numbers that matter are read there — see the todo):
+
+| Model | Download | GPU peak | Process footprint | Standard summary | Licence |
+|---|---|---|---|---|---|
+| Qwen3 1.7B (4-bit) | 984 MB | 1.85 GB | 1.3 GB | 1.8–2.3 s | Apache 2.0 |
+| Qwen3 0.6B (4-bit) | 351 MB | 0.98 GB | 0.68 GB | 2.1–2.5 s | Apache 2.0 |
+| Gemma 3 1B (4-bit), dropped | 771 MB | 1.6 GB | 1.5 GB | 6.4–8.8 s | Gemma terms |
+
+What the Mac run says (`TEST_RUNNER_CLIO_INTEGRATION=1 xcodebuild … -only-testing:ClioMobileSummaryTests`,
+on the plumber transcript the Foundation Models test uses):
+
+- All three load from the installed folder with no network and release
+  their memory after.
+- **Qwen3 1.7B** writes real summaries in the shape asked for — paragraphs,
+  bullets, numbered — in English and Dutch, with sensible five-word
+  titles. Two limits seen: it wrote "£1100" for "eleven hundred" in two of
+  three runs although the rules say to add no currency, and asked for a
+  detailed numbered list it stopped after one item twice. It is the
+  default.
+- **Qwen3 0.6B** is faithful but literal: its standard summary is the
+  transcript lightly rewritten, and in Dutch it returns the transcript.
+  Bullets and numbering come out right. Kept as the option for a phone
+  with 4 GB, and said so on its row.
+- **Gemma 3 1B** was dropped. Its end-of-turn token had to be named as a
+  stop (`extraEOSTokens`) or it ran on into noise for 17 s; stopped
+  properly it still added a "**Notes:**" section it was told not to,
+  repeated items to fill a numbered list, wrote "$1100" and "eleven hundred
+  dollars", echoed "no label" into its titles, and answered the Dutch
+  transcript in English about a "stove". That is below the faithfulness
+  bar, so it is not offered.
+- Every small model needed the title asked for in a second call; asked for
+  "Title: … then the summary" in one answer, the 0.6B copied the
+  placeholder as its title or skipped the line.
+- The GPU peak is the weights plus a capped cache; the process footprint is
+  what jetsam counts on a phone, and on a phone the GPU memory is in it.
+  The catalog's `memoryBytes` — 1.2 GB and 2.3 GB — are the peaks rounded
+  up with room for the app, until a phone has been read.
+
+Not measured: anything on a phone. An M-series Mac does two seconds; an
+iPhone 15's A16 will take several times longer and is the test that
+matters, together with `GPU.peakMemory` on the device and whether the
+increased-memory entitlement is granted at signing.
+
 ## Looking at it
 
 Any screen can be put on a simulator without tapping through to it, on
@@ -432,6 +538,11 @@ Verified by something repeatable, as of milestone 6:
 - with `CLIO_INTEGRATION=1`, on the host: Tiny downloads from Hugging Face
   with its tokenizer and transcribes synthesized speech correctly, through
   the engine and through the controller
+
+- the release candidate's own checks, listed in `AGENTS.md` ▸ "What is
+  proven, and what is not": the quiet tail reaching the real model, the
+  row landing before the words, the shared prompt on Apple's model and on
+  two downloaded ones on the host
 
 Not verified, and worth knowing:
 

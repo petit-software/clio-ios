@@ -143,13 +143,14 @@ public enum ModelCatalog {
 /// mlx-community repos on Hugging Face: 4-bit weights, config and tokenizer
 /// at the root of each repo, loaded and run on the GPU by `MLXSummaryEngine`.
 ///
-/// Three, deliberately: a small one that fits a phone with 4 GB, a middle
-/// one that is the default, and one from another family for anyone who
-/// wants to compare. Sizes are the repos' own, measured; the memory figures
-/// are estimates — about one and a half times the weights plus working
-/// room — and the figure that matters is measured on a phone, see
-/// AGENTS.md. Both Qwen3 models are Apache 2.0; Gemma 3 is under Google's
-/// Gemma terms, which allow this use and ask that they be passed on.
+/// Two, deliberately: a small one that fits a phone with 4 GB and stays
+/// close to the transcript, and the one to start with. Gemma 3 1B was
+/// tried and dropped — it invented a currency, added headings it was told
+/// not to and answered Dutch in English; see docs/plan.md, milestone 7.
+/// Sizes are the repos' own, measured. The memory figures are the GPU's
+/// peak on a Mac for a standard summary, rounded up with room for the rest
+/// of the process; the figure that matters is read on a phone, see
+/// AGENTS.md. Both are Apache 2.0.
 public enum LanguageModelCatalog {
     public static let builtIn: [CatalogModel] = [
         CatalogModel(
@@ -159,8 +160,8 @@ public enum LanguageModelCatalog {
             approximateBytes: 351_000_000,
             tier: .fast,
             languages: .multilingual,
-            note: "Smallest. Short, plain summaries; fits a phone with 4 GB. Apache 2.0.",
-            memoryBytes: 900_000_000),
+            note: "Smallest; fits a phone with 4 GB. Stays close to the words said, summarizes little. Apache 2.0.",
+            memoryBytes: 1_200_000_000),
         CatalogModel(
             id: "Qwen3-1.7B-4bit",
             displayName: "Qwen3 1.7B",
@@ -168,17 +169,8 @@ public enum LanguageModelCatalog {
             approximateBytes: 984_000_000,
             tier: .balanced,
             languages: .multilingual,
-            note: "The one to start with. Apache 2.0.",
-            memoryBytes: 1_900_000_000),
-        CatalogModel(
-            id: "gemma-3-1b-it-4bit",
-            displayName: "Gemma 3 1B",
-            repo: "mlx-community/gemma-3-1b-it-4bit",
-            approximateBytes: 772_000_000,
-            tier: .balanced,
-            languages: .multilingual,
-            note: "Google's model, under the Gemma terms of use.",
-            memoryBytes: 1_500_000_000),
+            note: "The one to start with. Real summaries, English and Dutch. Apache 2.0.",
+            memoryBytes: 2_300_000_000),
     ]
 
     public static let defaultModelID = "Qwen3-1.7B-4bit"

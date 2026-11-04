@@ -41,11 +41,11 @@ struct SettingsView: View {
                     // By value, so the row and the library's banner both
                     // arrive through the same destination below.
                     NavigationLink(value: SettingsPage.model) {
-                        LabeledContent("Model", value: activeModelName)
+                        LabeledContent("Models", value: modelNames)
                     }
                 } footer: {
-                    Text("Which Whisper model transcribes, downloading and deleting "
-                         + "models, and whether one stays loaded between recordings.")
+                    Text("Which Whisper model transcribes and which language model writes "
+                         + "summaries; downloading and deleting them.")
                 }
                 Section {
                     page("Transcription",
@@ -163,8 +163,14 @@ struct SettingsView: View {
         }
     }
 
-    private var activeModelName: String {
-        model.capture.activeModel?.displayName ?? "None"
+    /// The transcription model and the summary model, on the row.
+    private var modelNames: String {
+        let whisper = model.capture.activeModel?.displayName ?? "None"
+        let summary: String = switch model.settings.settings.summaryModel {
+        case .apple: "Apple Intelligence"
+        case .local(let id): model.languageModels.displayName(for: id)
+        }
+        return "\(whisper) · \(summary)"
     }
 
     private func textSummary(_ store: SettingsStore) -> String {
@@ -304,11 +310,11 @@ struct SettingsView: View {
         } footer: {
             Text(availability.isAvailable
                  ? "After each transcription a language model on this phone writes a "
-                   + "title and a summary. The transcript never leaves the phone."
+                   + "title and a summary. Which one is chosen in Settings ▸ Models. "
+                   + "The transcript never leaves the phone."
                  : "A title and a summary for each recording, written on the phone by "
-                   + "Apple Intelligence or by a model downloaded below.")
+                   + "Apple Intelligence or by a model downloaded in Settings ▸ Models.")
         }
-        summaryModelSection(store)
         // How the summary reads. Read by every path that writes one — the
         // first summary and Summarize Again alike — at the moment it runs.
         Section {
@@ -340,64 +346,6 @@ struct SettingsView: View {
             Text("Applies to the next summary, and to Summarize Again on an existing "
                  + "recording. The transcript is not changed.")
         }
-    }
-
-    /// Which model writes the summaries: Apple's, where the phone has it,
-    /// or one downloaded here. Each language model is a catalog row like
-    /// the Whisper ones, with its size, the memory it needs, and whether
-    /// this phone can run it.
-    private func summaryModelSection(_ store: SettingsStore) -> some View {
-        let choice = store.settings.summaryModel
-        let device = model.summaries.deviceSupport
-        return Section {
-            appleRow(store, selected: choice == .apple)
-            ForEach(model.languageModels.catalog) { entry in
-                ModelRow(entry: entry, manager: model.languageModels,
-                         isActive: choice == .local(id: entry.id),
-                         busy: model.intelligence.inProgress.isEmpty == false,
-                         unsupported: model.summaries.support(for: entry).reason) {
-                    model.select(summaryModel: .local(id: entry.id))
-                }
-            }
-        } header: {
-            Text("Model")
-        } footer: {
-            Text(device.isSupported
-                 ? "Downloaded once from Hugging Face, then run on this phone's GPU. "
-                   + "A model is loaded for each summary and released after. Nothing "
-                   + "you record is ever uploaded."
-                 : (device.reason ?? "") + " Apple Intelligence is the only option here.")
-        }
-    }
-
-    /// Apple's model as a row: a tap picks it when it is there, the reason
-    /// when it is not.
-    private func appleRow(_ store: SettingsStore, selected: Bool) -> some View {
-        let apple = model.summaries.appleAvailability
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Apple Intelligence")
-                Text(apple.isAvailable
-                     ? "Built into iOS 26. Nothing to download."
-                     : apple.reason ?? "Not available on this phone.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            if apple.isAvailable {
-                Image(systemName: selected ? "checkmark.circle.fill" : "checkmark.circle")
-                    .font(.title2)
-                    .foregroundStyle(.green)
-                    .frame(width: ModelRow.slot, height: ModelRow.slot)
-                    .accessibilityLabel(selected ? "Selected" : "Available")
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if apple.isAvailable { model.select(summaryModel: .apple) }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(apple.isAvailable ? .isButton : [])
     }
 
     /// What is on disk and how to get rid of it. Its own page: deleting

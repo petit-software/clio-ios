@@ -20,28 +20,36 @@ Or from the shell:
 
 ```sh
 xcodebuild -project Clio.xcodeproj -scheme Clio \
-  -destination 'platform=iOS Simulator,name=iPhone 17' build
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2' build
 xcodebuild -project Clio.xcodeproj -scheme Clio \
-  -destination 'platform=iOS Simulator,name=iPhone 17' test
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2' test
 xcrun simctl privacy booted grant microphone com.bartbak.clio.ios   # then the UI test:
 xcodebuild -project Clio.xcodeproj -scheme Clio -only-testing:ClioUITests \
-  -destination 'platform=iOS Simulator,name=iPhone 17' test
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.2' test
 ```
+
+[`AGENTS.md`](AGENTS.md) is the orientation for working on the code: the
+loop file by file, the commands, the patterns, and the traps.
 
 The Xcode project is generated from `project.yml` and not tracked. To put a
 particular screen on a simulator without tapping through to it, see
 "Looking at it" in the plan.
 
 ```sh
-CLIO_INTEGRATION=1 swift test --filter Integration   # downloads ~81 MB, real Whisper
+CLIO_INTEGRATION=1 swift test --filter Integration   # downloads ~81 MB, real Whisper (and Apple's model, where the Mac has it)
+TEST_RUNNER_CLIO_INTEGRATION=1 xcodebuild -workspace .swiftpm/xcode/package.xcworkspace \
+  -scheme ClioMobile-Package -destination 'platform=macOS' \
+  -only-testing:ClioMobileSummaryTests test           # downloads ~350 MB, a real MLX summary (needs xcodebuild: Metal)
 ```
 
 ## Status
 
-Milestone 5: Whisper via WhisperKit on models downloaded from Hugging Face,
-titles and summaries from Apple's on-device language model where the phone
-has one, a transcript whose sentences can be tapped to play, "Record with
-Clio" from Siri and the Action button, interruption handling, a Live
-Activity while recording. Everything is proven on the host and the
+Release candidate: Whisper via WhisperKit on models downloaded from Hugging
+Face; titles and summaries from Apple's on-device model where the phone has
+one, or from a downloaded MLX model where it does not, both through one
+prompt shaped by Settings (note type, format, length); a transcript whose
+sentences can be tapped to play; "Record with Clio" from Siri, the Action
+button and a Lock Screen control; a Live Activity while recording; a live
+transcript preview while holding to record. Proven on the host and the
 simulator; the first run on a phone is still ahead, and TestFlight follows
 it.

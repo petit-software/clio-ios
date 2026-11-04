@@ -1,16 +1,20 @@
 import ClioMobileCore
 import SwiftUI
 
-/// Settings ▸ Model, as its own page.
+/// Settings ▸ Models, as its own page: the transcription models, then the
+/// summarization models.
 struct ModelSettingsPage: View {
     var body: some View {
-        Form { ModelSection() }
-            .navigationTitle("Model")
+        Form {
+            ModelSection()
+            SummaryModelSection()
+        }
+        .navigationTitle("Models")
     }
 }
 
-/// The catalog, one row per model, each row in whatever state that model
-/// is in — downloadable, downloading, installed, selected, failed.
+/// The Whisper catalog, one row per model, each row in whatever state that
+/// model is in — downloadable, downloading, installed, selected, failed.
 /// Selecting is a tap on an installed row; deleting is a long press.
 struct ModelSection: View {
     @Environment(AppModel.self) private var model
@@ -28,7 +32,7 @@ struct ModelSection: View {
                 get: { model.settings.settings.keepModelInMemory },
                 set: { model.settings.settings.keepModelInMemory = $0 }))
         } header: {
-            Text("Model")
+            Text("Transcription")
         } footer: {
             Text(footer)
         }
@@ -46,6 +50,68 @@ struct ModelSection: View {
             : "The model is loaded for each transcription and released after, which "
               + "saves memory and costs a few seconds per recording."
         return base + " " + kept
+    }
+}
+
+/// Which model writes the summaries: Apple's, where the phone has it, or
+/// one downloaded here. Each language model is a catalog row like the
+/// Whisper ones above, with its size, the memory it needs, and whether this
+/// phone can run it.
+struct SummaryModelSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let choice = model.settings.settings.summaryModel
+        let device = model.summaries.deviceSupport
+        Section {
+            appleRow(selected: choice == .apple)
+            ForEach(model.languageModels.catalog) { entry in
+                ModelRow(entry: entry, manager: model.languageModels,
+                         isActive: choice == .local(id: entry.id),
+                         busy: model.intelligence.inProgress.isEmpty == false,
+                         unsupported: model.summaries.support(for: entry).reason) {
+                    model.select(summaryModel: .local(id: entry.id))
+                }
+            }
+        } header: {
+            Text("Summaries")
+        } footer: {
+            Text(device.isSupported
+                 ? "Downloaded once from Hugging Face, then run on this phone's GPU. "
+                   + "A model is loaded for each summary and released after. Nothing "
+                   + "you record is ever uploaded."
+                 : (device.reason ?? "") + " Apple Intelligence is the only option here.")
+        }
+    }
+
+    /// Apple's model as a row: a tap picks it when it is there, the reason
+    /// when it is not.
+    private func appleRow(selected: Bool) -> some View {
+        let apple = model.summaries.appleAvailability
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Apple Intelligence")
+                Text(apple.isAvailable
+                     ? "Built into iOS 26. Nothing to download."
+                     : apple.reason ?? "Not available on this phone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if apple.isAvailable {
+                Image(systemName: selected ? "checkmark.circle.fill" : "checkmark.circle")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                    .frame(width: ModelRow.slot, height: ModelRow.slot)
+                    .accessibilityLabel(selected ? "Selected" : "Available")
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if apple.isAvailable { model.select(summaryModel: .apple) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(apple.isAvailable ? .isButton : [])
     }
 }
 

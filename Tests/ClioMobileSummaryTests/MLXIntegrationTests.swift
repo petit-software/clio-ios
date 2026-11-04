@@ -78,14 +78,22 @@ struct MLXIntegrationTests {
                 using: installed)
             let took = ContinuousClock.now - started
             print("[mlx] \(name) in \(took): title \"\(summary.title)\"")
-            print("[mlx] \(summary.summary)")
-            print("[mlx] peak GPU memory \(MLX.GPU.peakMemory / 1_000_000) MB")
+            print("[mlx] \(summary.summary.replacingOccurrences(of: "\n", with: " ⏎ "))")
+            print("[mlx] peak GPU memory \(MLX.GPU.peakMemory / 1_000_000) MB, "
+                  + "process footprint \(Self.footprintMB()) MB")
             #expect(!summary.title.isEmpty)
             #expect(summary.title.split(separator: " ").count <= 5)
             #expect(!summary.summary.isEmpty)
             let text = summary.summary.lowercased()
             #expect(text.contains("plumber") || text.contains("boiler") || text.contains("thursday"))
             #expect(!summary.summary.contains("<think>"))
+            #expect(!summary.summary.contains("<end_of_turn>"))
+            // Told not to, the 1.7B model still writes "£1100" for "eleven
+            // hundred" now and then. Reported, not asserted: it is the known
+            // limit of a small model, documented in the plan.
+            if summary.summary.contains("$") || summary.summary.contains("£") || summary.summary.contains("€") {
+                print("[mlx] note: a currency sign the speaker did not say")
+            }
             if preferences.format == .bullets {
                 #expect(summary.summary.contains("- ") || summary.summary.contains("• "), "bullets, as asked")
             }
@@ -105,10 +113,24 @@ struct MLXIntegrationTests {
         let summary = try await engine.summarize(
             SummaryRequest(transcript: dutch, language: "nl"), using: installed)
         print("[mlx] nl title: \(summary.title)")
-        print("[mlx] nl summary: \(summary.summary)")
+        print("[mlx] nl summary: \(summary.summary.replacingOccurrences(of: "\n", with: " ⏎ "))")
+        #expect(!summary.title.isEmpty)
         #expect(!summary.summary.isEmpty)
         let text = summary.summary.lowercased()
         #expect(text.contains("loodgieter") || text.contains("ketel") || text.contains("plumber"))
+    }
+
+    /// Resident memory of this process, which is what jetsam counts on a
+    /// phone; the GPU figure alone is the weights and the cache.
+    static func footprintMB() -> Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int(info.phys_footprint / 1_000_000) : -1
     }
 
     @Test("Thinking tags are stripped before the answer is read")
@@ -117,5 +139,7 @@ struct MLXIntegrationTests {
         let clean = MLXSummaryEngine.strippingThinking(raw)
         #expect(clean.hasPrefix("Title: Plumber Thursday"))
         #expect(SummaryPrompt.parse(clean).title == "Plumber Thursday")
+        let runOn = "The plumber comes Thursday.<end_of_turn><end_of_turn>tained<end_of_turn>"
+        #expect(MLXSummaryEngine.strippingThinking(runOn) == "The plumber comes Thursday.")
     }
 }

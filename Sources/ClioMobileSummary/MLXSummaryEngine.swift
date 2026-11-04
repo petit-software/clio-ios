@@ -14,6 +14,11 @@ import MLXLMCommon
 /// text model gives text back; the answer is taken apart by
 /// `SummaryPrompt.parse`.
 ///
+/// Two answers, not one: the notes first, then a title for them. The
+/// smallest model copied the placeholder of a two-part form as its title
+/// or skipped the line; asked one thing at a time it manages both. The
+/// second call is a short prompt and five words, a fraction of the first.
+///
 /// The model is loaded for each summary and released after: a gigabyte
 /// of weights is not kept resident on a phone with four. The GPU buffer
 /// cache is capped small for the same reason.
@@ -43,8 +48,34 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
         let container = try await load(model)
         defer { Task { await self.unload() } }
 
-        let instructions = SummaryPrompt.instructions(for: request.preferences, answerForm: true)
-        let prompt = SummaryPrompt.prompt(for: request.transcript)
+        // The notes. Any "Title:" line the model adds of its own accord is
+        // taken off by `parse`.
+        let notesText = try await Self.generate(
+            in: container,
+            instructions: SummaryPrompt.instructions(for: request.preferences, answerForm: false),
+            prompt: SummaryPrompt.prompt(for: request.transcript),
+            maxTokens: Self.maxTokens)
+        try Task.checkCancellation()
+        var summary = SummaryPrompt.parse(notesText)
+        guard !summary.summary.isEmpty else { throw SummaryEngineError.empty }
+
+        // Then the title, for those notes.
+        if summary.title.isEmpty {
+            let titleText = try await Self.generate(
+                in: container,
+                instructions: SummaryPrompt.titleInstructions,
+                prompt: SummaryPrompt.titlePrompt(forNotes: summary.summary,
+                                                  transcript: request.transcript),
+                maxTokens: 24)
+            summary.title = SummaryPrompt.cleanTitle(titleText)
+        }
+        return summary
+        #endif
+    }
+
+    /// One answer from the loaded model, thinking stripped.
+    private static func generate(in container: ModelContainer, instructions: String,
+                                 prompt: String, maxTokens: Int) async throws -> String {
         let text: String
         do {
             text = try await container.perform { context in
@@ -54,7 +85,7 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
                         // Qwen3 thinks aloud unless told not to; other
                         // templates ignore the key.
                         additionalContext: ["enable_thinking": false]))
-                let parameters = GenerateParameters(maxTokens: Self.maxTokens,
+                let parameters = GenerateParameters(maxTokens: maxTokens,
                                                     temperature: 0.3, topP: 0.9,
                                                     repetitionPenalty: 1.1)
                 let result: GenerateResult = try MLXLMCommon.generate(
@@ -65,16 +96,9 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
                 return result.output
             }
         } catch {
-            throw Self.friendly(error)
+            throw friendly(error)
         }
-        try Task.checkCancellation()
-
-        let summary = SummaryPrompt.parse(Self.strippingThinking(text))
-        guard !summary.title.isEmpty || !summary.summary.isEmpty else {
-            throw SummaryEngineError.empty
-        }
-        return summary
-        #endif
+        return strippingThinking(text)
     }
 
     public func unload() async {
@@ -92,7 +116,11 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
         // Buffers MLX keeps for reuse: twenty megabytes, as its iOS notes
         // suggest, rather than the default of most of the GPU's working set.
         MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
-        let configuration = ModelConfiguration(directory: model.url)
+        // Gemma ends its turn with a token its tokenizer config does not
+        // list as end-of-sequence; without naming it the model runs on into
+        // noise until the token cap. Harmless for a model that never emits it.
+        let configuration = ModelConfiguration(directory: model.url,
+                                               extraEOSTokens: ["<end_of_turn>", "<|im_end|>"])
         do {
             let loaded = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { _ in }
             container = loaded
@@ -103,12 +131,17 @@ public actor MLXSummaryEngine: LocalSummaryEngine {
         }
     }
 
-    /// `<think>…</think>`, which Qwen3 may still emit, and anything else in
-    /// angle-bracket tags.
+    /// `<think>…</think>`, which Qwen3 may still emit, and a turn marker
+    /// that slipped through as text.
     static func strippingThinking(_ text: String) -> String {
-        text.replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
+        var clean = text
+            .replacingOccurrences(of: "(?s)<think>.*?</think>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "</?think>", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Anything after a stray end-of-turn is the model talking to itself.
+        if let marker = clean.range(of: "<end_of_turn>") ?? clean.range(of: "<|im_end|>") {
+            clean = String(clean[..<marker.lowerBound])
+        }
+        return clean.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// MLX's errors are for developers. A sentence for the detail view.
