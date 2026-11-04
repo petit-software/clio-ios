@@ -287,7 +287,9 @@ Verified by something repeatable, as of this release candidate:
   installed folder offline, follow the shared prompt's shape, title in a
   second call and release their memory; numbers and limits in
   `docs/plan.md`, milestone 7.
-- The app and the widget extension build for the iOS 27.2 simulator.
+- The app and the widget extension build for the iOS 27.2 simulator. The
+  app is iPhone only (`TARGETED_DEVICE_FAMILY: "1"`), so App Store Connect
+  asks for no iPad screenshots; an iPad runs it in the compatibility window.
 
 Not verified, and worth knowing:
 

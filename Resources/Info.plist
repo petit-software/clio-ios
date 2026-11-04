@@ -46,19 +46,12 @@
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
-	<!-- Portrait only on the phone: the list, the record screen and the
-	     detail are laid out for one orientation. The iPad keeps all four
-	     below. -->
+	<!-- Portrait only: the list, the record screen and the detail are laid
+	     out for one orientation. iPhone only; on an iPad the app runs in
+	     the compatibility window. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<!-- Recording continues when the screen locks. Interruption handling
 	     (a call mid-recording) is milestone 4; see docs/plan.md. -->

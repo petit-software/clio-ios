@@ -90,7 +90,7 @@ targets:
         # holds on white (2.1:1, what Apple's own green manages) without going olive.
         # Nothing in the app is the system blue.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: TJ3ALYQV5G
@@ -124,7 +124,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.bartbak.clio.ios.widget
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Sources/ClioMobileWidget/Info.plist
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: TJ3ALYQV5G
