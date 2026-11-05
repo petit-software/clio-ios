@@ -15,18 +15,18 @@ struct ClioMobileWidgetBundle: WidgetBundle {
 }
 
 /// A button for the Lock Screen, Control Center and the Action button:
-/// "Record". It runs `RecordControlIntent`, which opens the app on its
-/// record URL; the app starts the microphone as it comes forward. The
-/// control cannot record on its own — the extension has no microphone and
-/// iOS does not start capture from the background — so the label says
-/// what it does: open Clio to record. A locked phone asks for its unlock
-/// first, as it does for any control that opens an app.
+/// "Record". It runs `StartRecordingIntent`, whose `openAppWhenRun` has
+/// the system open the app and run the intent there, where it starts the
+/// microphone. The control cannot record on its own — the extension has
+/// no microphone and iOS does not start capture from the background — so
+/// the label says what it does: open Clio to record. A locked phone asks
+/// for its unlock first, as it does for any control that opens an app.
 struct RecordControl: ControlWidget {
     static let kind = "com.bartbak.clio.ios.record"
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind) {
-            ControlWidgetButton(action: RecordControlIntent()) {
+            ControlWidgetButton(action: StartRecordingIntent()) {
                 // Clio's own mark, a custom symbol in this extension's
                 // catalog, so the control carries the app's icon rather
                 // than the system microphone.

@@ -218,18 +218,19 @@ shortcut before trusting the build. Settings ▸ Siri & Action Button shows
 the phrase (`SiriTipView`), opens the Shortcuts app (`ShortcutsLink`) and
 gives the Action button directions; no public URL opens that Settings page.
 
-**Two record intents, by where they run.** `StartRecordingIntent` is the
-App Shortcut: `openAppWhenRun`, so iOS brings the app forward and runs
-`perform` inside it, where `RecordRequests.handler` (set in
-`ClioMobileApp.init`) sets the pending action. It once returned
-`OpenURLIntent(clio://record)` instead; inside the app that is a second
-launch, Shortcuts refused it with "launch is prohibited" after Clio had
-opened, and nothing recorded. `RecordControlIntent` is the widget's
-control: it runs in the extension, which has no microphone and no view of
-the app, so it opens `clio://record` and the app starts recording as it
-comes forward. iOS does not start capture from the background anyway. Do
-not make either intent say recording has started. A locked phone asks for
-its unlock first, for any control that opens an app.
+**One record intent, and only `openAppWhenRun` opens the app.**
+`StartRecordingIntent` serves Siri, Shortcuts, the Action button and the
+widget's control alike: iOS brings the app forward and runs `perform`
+inside it, where `RecordRequests.handler` (set in `ClioMobileApp.init`)
+sets the pending action. Two URL answers were tried and failed. From the
+app, for Shortcuts, `OpenURLIntent(clio://record)` was a second launch and
+was refused with "launch is prohibited" after Clio had opened. From the
+extension, for the control, the same URL did nothing: a control's open-URL
+result honours universal links only, never a custom scheme. The intent
+has to be in both bundles' metadata (it is, through `ClioMobileActivity`).
+iOS does not start capture from the background anyway; do not make the
+intent say recording has started. A locked phone asks for its unlock
+first, for any control that opens an app.
 
 **MLX on a phone is memory-bound.** The catalog's `memoryBytes` are
 estimates (about 1.6× the weights plus 300 MB); `LanguageModelSupport.fits`
